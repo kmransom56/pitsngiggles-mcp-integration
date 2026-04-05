@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Race Engineer | Pits n' Giggles + MCP</title>
+    <meta name="description" content="F1 Race Strategy Center with AI-powered race engineering via MCP">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #05070a;
+            --sidebar-bg: rgba(12, 14, 18, 0.92);
+            --accent-primary: #00f2ff;
+            --accent-secondary: #a855f7;
+            --accent-warm: #f97316;
+            --text-main: #e0e4e8;
+            --text-muted: rgba(255, 255, 255, 0.45);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --sidebar-width: 420px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body, html {
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+        }
+
+        .layout-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .telemetry-frame-container {
+            flex-grow: 1;
+            position: relative;
+            background: #000;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        iframe#telemetry-view {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.6);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+            overflow: hidden;
+            border-left: none;
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            left: -36px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 64px;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            color: var(--accent-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 200;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(0, 242, 255, 0.1);
+            width: 32px;
+            left: -40px;
+        }
+
+        .sidebar.collapsed .sidebar-toggle .arrow {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, rgba(0, 242, 255, 0.06), rgba(168, 85, 247, 0.04), transparent);
+            position: relative;
+        }
+
+        .sidebar-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-primary), var(--accent-secondary), transparent);
+            opacity: 0.4;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.05rem;
+            text-transform: uppercase;
+            letter-spacing: 2.5px;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .sidebar-header small {
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(0, 242, 255, 0.08);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-primary);
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent-primary); }
+            50% { opacity: 0.4; box-shadow: 0 0 8px var(--accent-primary); }
+        }
+
+        .chat-container {
+            flex-grow: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+
+        .chat-container::-webkit-scrollbar { width: 4px; }
+        .chat-container::-webkit-scrollbar-track { background: transparent; }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.15);
+            border-radius: 4px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 90%;
+            font-size: 0.88rem;
+            line-height: 1.55;
+            animation: fadeSlideIn 0.35s ease-out;
+            position: relative;
+        }
+
+        .message.ai {
+            background: rgba(255, 255, 255, 0.04);
+            align-self: flex-start;
+            border-left: 2px solid var(--accent-primary);
+            border-top-left-radius: 4px;
+        }
+
+        .message.ai .msg-label {
+            display: block;
+            font-size: 0.62rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-primary);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, rgba(0, 242, 255, 0.15), rgba(168, 85, 247, 0.1));
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            align-self: flex-end;
+            font-weight: 400;
+            border-top-right-radius: 4px;
+        }
+
+        .message.system {
+            background: rgba(249, 115, 22, 0.08);
+            border-left: 2px solid var(--accent-warm);
+            align-self: center;
+            max-width: 95%;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            border-top-left-radius: 4px;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 14px 18px;
+            align-self: flex-start;
+        }
+
+        .typing-indicator span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-4px); }
+        }
+
+        .chat-input {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .input-wrapper {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(0, 242, 255, 0.1);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        input[type="text"]::placeholder {
+            color: var(--text-muted);
+        }
+
+        button.send-btn {
+            background: linear-gradient(135deg, var(--accent-primary), #00c4d6);
+            color: #000;
+            border: none;
+            padding: 0 18px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.78rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            text-transform: uppercase;
+        }
+
+        button.send-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0, 242, 255, 0.3);
+        }
+
+        button.send-btn:active {
+            transform: translateY(0);
+        }
+
+        .quick-actions {
+            padding: 10px 16px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .quick-btn {
+            padding: 5px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-family: 'Outfit', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .quick-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: rgba(0, 242, 255, 0.06);
+        }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 900px) {
+            :root { --sidebar-width: 320px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout-container">
+        <div class="telemetry-frame-container">
+            <iframe id="telemetry-view" src="/telemetry/eng-view" title="Telemetry Engineering View"></iframe>
+        </div>
+
+        <aside class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" id="toggle-btn" title="Toggle Race Engineer Panel">
+                <span class="arrow">&#9654;</span>
+            </button>
+
+            <div class="sidebar-header">
+                <div class="header-top">
+                    <div class="header-title">
+                        <h2>F1 Race Engineer AI</h2>
+                        <small>Powered by MCP &bull; F1 23/24</small>
+                    </div>
+                    <div class="status-badge" id="mcp-status">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container" id="chat-container">
+                <div class="message system">
+                    <span class="msg-label">System</span>
+                    Initializing F1 Race Engineer MCP connection...
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <button class="quick-btn" data-msg="Analyze my current handling balance">Handling Analysis</button>
+                <button class="quick-btn" data-msg="What setup changes would reduce understeer?">Fix Understeer</button>
+                <button class="quick-btn" data-msg="What setup changes would reduce oversteer?">Fix Oversteer</button>
+                <button class="quick-btn" data-msg="Analyze optimal pit window">Pit Strategy</button>
+                <button class="quick-btn" data-msg="Compare tyre compound performance">Tyre Strategy</button>
+                <button class="quick-btn" data-msg="Analyze fuel consumption">Fuel Check</button>
+            </div>
+
+            <div class="chat-input">
+                <div class="input-wrapper">
+                    <input type="text" id="chat-input" placeholder="Ask about setup, strategy, or telemetry..." autocomplete="off">
+                </div>
+                <button class="send-btn" id="send-btn">Send</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // Configuration
+        const MCP_HTTP_ENDPOINT = window.location.protocol + '//' + window.location.host + '/mcp/chat';
+        const MCP_WS_ENDPOINT = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/mcp/ws';
+        
+        let ws = null;
+        let mcpConnected = false;
+
+        // Sidebar Toggle
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-btn');
+
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+
+        // Chat Logic
+        const chatContainer = document.getElementById('chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const statusText = document.getElementById('status-text');
+
+        function addMessage(text, type = 'user') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            if (type === 'ai') {
+                msg.innerHTML = `<span class="msg-label">Race Engineer</span>${text}`;
+            } else if (type === 'system') {
+                msg.innerHTML = `<span class="msg-label">System</span>${text}`;
+            } else {
+                msg.textContent = text;
+            }
+            chatContainer.appendChild(msg);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.id = 'typing';
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+            chatContainer.appendChild(indicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            const el = document.getElementById('typing');
+            if (el) el.remove();
+        }
+
+        function setStatus(text, connected) {
+            statusText.textContent = text;
+            mcpConnected = connected;
+        }
+
+        // Initialize WebSocket Connection
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(MCP_WS_ENDPOINT);
+
+                ws.onopen = () => {
+                    console.log('MCP WebSocket connected');
+                    setStatus('Live', true);
+                    addMessage('Connected to F1 Race Engineer MCP Server. Ready to analyze telemetry and provide setup recommendations.', 'ai');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'response') {
+                            hideTyping();
+                            const response = data.data.response;
+                            addMessage(response, 'ai');
+                        } else if (data.type === 'alert') {
+                            const analysis = data.data;
+                            if (analysis.issues && analysis.issues.length > 0) {
+                                addMessage(`🚨 Alert: ${analysis.issues.join(', ')}`, 'system');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    setStatus('Error', false);
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    setStatus('Disconnected', false);
+                    // Attempt reconnect after 5 seconds
+                    setTimeout(connectWebSocket, 5000);
+                };
+            } catch (error) {
+                console.error('Failed to connect WebSocket:', error);
+                setStatus('Error', false);
+            }
+        }
+
+        // Send message via WebSocket or HTTP
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            chatInput.value = '';
+            showTyping();
+
+            try {
+                // Try WebSocket first, fallback to HTTP
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'chat',
+                        message: text,
+                        telemetry: null // Could fetch from iframe if needed
+                    }));
+                } else {
+                    // HTTP fallback
+                    const response = await fetch(MCP_HTTP_ENDPOINT, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: text,
+                            telemetry: null
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    hideTyping();
+                    addMessage(data.response, 'ai');
+                }
+            } catch (error) {
+                hideTyping();
+                console.error('Error sending message:', error);
+                addMessage(`Error: ${error.message}. Please check MCP server connection.`, 'system');
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Quick Actions
+        document.querySelectorAll('.quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                chatInput.value = btn.dataset.msg;
+                sendMessage();
+            });
+        });
+
+        // Initialize connection on load
+        window.addEventListener('load', () => {
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>

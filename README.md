@@ -1,178 +1,298 @@
-# Pits n' Giggles
-**Real-time in-game overlays + advanced F1 telemetry dashboards + AI Race Engineer.**
-*(Because racing fast is good. Racing smart is better.)*
+# F1 Race Engineer MCP Integration for Pits N Giggles
 
-![HUD Overlay](screenshots/hud.png)
+AI-powered Race Engineering for F1 23 using Model Context Protocol (MCP)
 
----
+## 🏎️ Features
 
-## 🚀 Quick Start (2 Minutes)
+- **Real-time Telemetry Analysis** - Live data from Pits N Giggles
+- **AI Race Engineer** - Professional setup and strategy recommendations
+- **Setup Diagnostics** - Identify understeer, oversteer, and balance issues
+- **Tyre Strategy** - Optimal pit windows and compound analysis
+- **Fuel Management** - Consumption tracking and saving strategies
+- **Voice Integration Ready** - Speech-to-text and text-to-speech support
+- **Docker-Based Deployment** - One-command setup for any platform
+
+## 🚀 Quick Start with Docker
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Pits N Giggles running (or will run in Docker)
+- F1 23/24 game running and sending telemetry
+
+### Option 1: Simple Docker Deployment
 
 ```bash
-# Linux/macOS
-./start.sh
+# Clone the repository
+git clone https://github.com/kmransom56/pitsngiggles-mcp-integration.git
+cd pitsngiggles-mcp-integration
 
-# Windows
-start.bat
+# Start all services
+docker-compose up -d
+
+# Access the Strategy Center
+# Open https://localhost in your browser
 ```
 
-**Then open:** `http://localhost:4768/strategy-center` 🏎️
+### Option 2: With Custom LLM (OpenAI, etc.)
 
-**Full Guide:** [QUICKSTART.md](QUICKSTART.md)
+```bash
+# Create environment file
+cat > .env << EOF
+LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
+LLM_API_KEY=your-api-key-here
+EOF
+
+# Start services
+docker-compose up -d
+```
+
+## 📋 What Gets Deployed
+
+The Docker Compose stack includes:
+
+1. **MCP Server** (Port 8765)
+   - F1 Race Engineer AI
+   - WebSocket and HTTP APIs
+   - Telemetry analysis engine
+
+2. **Nginx Reverse Proxy** (Ports 80/443)
+   - Serves Strategy Center UI
+   - Proxies to Pits N Giggles telemetry
+   - SSL/TLS with self-signed cert (development)
+
+3. **Volumes**
+   - `mcp-data` - Persistent MCP server data
+   - `nginx-logs` - Access and error logs
+   - `ssl-certs` - SSL certificates
+
+## 🎮 Usage
+
+### Access Points
+
+- **Strategy Center UI**: https://localhost
+- **MCP HTTP API**: https://localhost/mcp/
+- **MCP WebSocket**: wss://localhost/mcp/ws
+- **Health Check**: https://localhost/health
+
+### Connecting Pits N Giggles
+
+The default configuration assumes Pits N Giggles is running on your host machine on port 4768.
+
+**If Pits N Giggles is on a different host/port**, edit `nginx/conf.d/default.conf`:
+
+```nginx
+location /telemetry/ {
+    proxy_pass http://YOUR_HOST_IP:4768/;
+    # ...
+}
+```
+
+Then restart:
+```bash
+docker-compose restart nginx
+```
+
+## 🤖 AI Configuration
+
+### Using OpenAI or Compatible LLMs
+
+1. Set environment variables in `.env`:
+```bash
+LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
+LLM_API_KEY=sk-your-key-here
+```
+
+2. Restart MCP server:
+```bash
+docker-compose restart mcp-server
+```
+
+### Supported AI Clients
+
+- **OpenAI** (GPT-4, GPT-3.5)
+- **Anthropic Claude** (via API)
+- **Local LLMs** (Ollama, LM Studio, etc.)
+- **Azure OpenAI**
+- **Any OpenAI-compatible endpoint**
+
+See `docs/AI_CLIENT_SETUP.md` for detailed configuration.
+
+## 🔧 Advanced Configuration
+
+### Custom Ports
+
+Edit `docker-compose.yml`:
+
+```yaml
+services:
+  mcp-server:
+    ports:
+      - "YOUR_PORT:8765"
+  
+  nginx:
+    ports:
+      - "YOUR_HTTP_PORT:80"
+      - "YOUR_HTTPS_PORT:443"
+```
+
+### Production SSL Certificates
+
+Replace self-signed certs with real ones:
+
+```bash
+# Copy your certs
+cp /path/to/fullchain.pem docker-volumes/ssl-certs/
+cp /path/to/privkey.pem docker-volumes/ssl-certs/
+
+# Update nginx config
+# Edit nginx/conf.d/default.conf ssl_certificate paths
+```
+
+### Running Pits N Giggles in Docker
+
+Uncomment the `pits-n-giggles` service in `docker-compose.yml`:
+
+```yaml
+pits-n-giggles:
+  image: pitsngiggles:latest
+  ports:
+    - "4768:4768"
+  # ...
+```
+
+## 📊 Monitoring
+
+### View Logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f mcp-server
+docker-compose logs -f nginx
+
+# Nginx access logs
+docker exec f1-nginx-proxy tail -f /var/log/nginx/f1-mcp.access.log
+```
+
+### Health Checks
+
+```bash
+# Check MCP server
+curl http://localhost:8765/health
+
+# Check via nginx
+curl https://localhost/health
+```
+
+## 🛠️ Development
+
+### Local Development (without Docker)
+
+```bash
+# Install Python dependencies
+pip install -r mcp_server/requirements.txt
+
+# Run MCP server
+python mcp_server/server.py
+
+# Serve frontend
+cd frontend && python -m http.server 8080
+```
+
+### Rebuild After Changes
+
+```bash
+# Rebuild specific service
+docker-compose build mcp-server
+
+# Rebuild and restart
+docker-compose up -d --build mcp-server
+```
+
+## 📚 Documentation
+
+- **MCP Integration**: `docs/MCP_INTEGRATION.md`
+- **F1 Race Engineer Agent**: `docs/F1_RACE_ENGINEER_AGENT.md`
+- **Voice Integration**: `docs/VOICE_INTEGRATION.md`
+- **AI Client Setup**: `docs/AI_CLIENT_SETUP.md`
+- **Building Guide**: `docs/BUILDING.md`
+
+## 🎯 Quick Action Guide
+
+Ask the AI Race Engineer:
+
+- "Analyze my current handling balance"
+- "What setup changes would reduce understeer?"
+- "What setup changes would reduce oversteer?"
+- "Analyze optimal pit window"
+- "Compare tyre compound performance"
+- "How can I improve my lap times?"
+
+## 🔒 Security Notes
+
+**For Development:**
+- Uses self-signed SSL certificates
+- All origins allowed in CORS
+
+**For Production:**
+- Replace with real SSL certificates
+- Configure specific CORS origins in `mcp_server/server.py`
+- Use environment variables for secrets
+- Enable firewall rules
+
+## 🐛 Troubleshooting
+
+### MCP Server Won't Start
+```bash
+# Check logs
+docker-compose logs mcp-server
+
+# Verify port not in use
+lsof -i :8765
+```
+
+### Can't Connect to Pits N Giggles
+```bash
+# Check Pits N Giggles is running
+curl http://localhost:4768/
+
+# Check nginx config
+docker-compose exec nginx nginx -t
+
+# Check from inside nginx container
+docker-compose exec nginx curl http://host.docker.internal:4768/
+```
+
+### SSL Certificate Errors
+```bash
+# Accept self-signed cert in browser, or
+# Add certificate exception, or
+# Use HTTP instead (not recommended)
+```
+
+## 🤝 Contributing
+
+Contributions welcome! Please see `CONTRIBUTING.md` for guidelines.
+
+## 📝 License
+
+See `LICENSE` file for details.
+
+## 🙏 Credits
+
+- **Pits N Giggles** - ashwin-nat
+- **MCP Integration** - kmransom56
+- **F1 23 Community**
+
+## 📞 Support
+
+- **Issues**: https://github.com/kmransom56/pitsngiggles-mcp-integration/issues
+- **Discussions**: https://github.com/kmransom56/pitsngiggles-mcp-integration/discussions
+- **Pits N Giggles**: https://www.pitsngiggles.com
 
 ---
 
-## 🆕 NEW: F1 Race Engineer AI
-
-Get **data-driven race engineering advice** with the built-in F1 Race Engineer AI!
-
-**Features:**
-- 🔧 **Setup Recommendations** - Based on real telemetry data
-- 📊 **Performance Analysis** - Lap consistency, tyre deg, sector times
-- 🏁 **Strategic Advice** - Pit windows, pace comparison, time loss analysis
-- 🤖 **10 Advanced MCP Tools** - Intelligent telemetry analysis
-
-**Access Points:**
-- **Built-in:** `http://localhost:4768/strategy-center` (no setup needed!)
-- **ChatGPT/Claude:** Connect via MCP for deeper conversations
-- **Cursor/VS Code:** AI + telemetry while coding
-
-**Guides:**
-- [Quick Start](QUICKSTART.md) - Get running in 2 minutes
-- [F1 Agent Setup](docs/F1_RACE_ENGINEER_QUICK_SETUP.md) - AI client configs
-- [MCP Integration](docs/MCP_INTEGRATION.md) - Full MCP guide
-- [AI Client Setup](docs/AI_CLIENT_SETUP.md) - 10+ AI tools supported
-
----
-
-## Overview
-
-Pits n' Giggles is a lightweight F1 telemetry companion that brings three major capabilities together:
-
-1. **In-game, always-on-top racing overlays** - lightweight HUD widgets you use *while driving*.
-2. **Deep-dive telemetry dashboards** - advanced analysis for tyre wear, lap times, fuel modelling, and more.
-3. **AI Race Engineer** - intelligent analysis and strategic advice powered by live telemetry data.
-
-Whether you're racing, streaming, analysing performance, coaching remotely, or getting AI-powered advice, Pits n' Giggles provides real-time insights without ever slowing you down.
-
----
-
-## In-Game Overlays (Primary Feature)
-
-Traditional telemetry tools expect you to click around mid-race. Ever tried navigating menus while taking Eau Rouge flat? Exactly.
-
-Pits n' Giggles overlays:
-
-- Stay **always on top** of your game window
-- Require **zero mouse interaction**
-- Are **high-contrast and glanceable**
-- Work seamlessly with streaming setups (OBS-friendly)
-- Are designed for wheel users, VR-style driving, and minimal distraction
-
-### Overlay Features
-- **Lap deltas** & **estimated lap times** & **dynamic sector color updates**
-- **Tyre compound, age, wear, and predictions**
-- **ERS usage** & deployment mode indicators
-- **Fuel load + live consumption model**
-- **Weather & track conditions**
-
-![HUD Overlay](screenshots/hud-collage.png)
-
----
-
-## Telemetry Dashboards (Equal Focus)
-
-![Main UI](screenshots/main-ui.png)
-
-Beyond the overlays, Pits n' Giggles includes a full browser-based telemetry suite.
-
-### Core Dashboard Features
-- Live race table with instant driver comparison
-- Player & spectator mode support
-- Configurable info density and row count
-- Surrounding-cars comparison (N ahead / N behind)
-- Distributed design: view telemetry from any device on your network
-
-### Driver Details
-Click any driver (preferably not during a fast lap):
-
-- **Lap-by-lap history**
-- **Tyre wear**, with regression-based prediction
-- **Car damage breakdown**
-- **ERS deployment patterns**
-- **Fuel consumption modelling** based on your actual driving
-- **Stint history & compound strategy analysis**
-- Autosaved session JSON for deeper review
-
----
-
-## Supported Games
-- **F1 2023**
-- **F1 2024**
-- **F1 2025**
-
----
-
-## Advanced Capabilities
-- **OBS-ready stream overlays**
-- **Distributed client/server architecture**
-- **Real-time data forwarding** to other apps
-- **Remote coaching** (engineers can watch from anywhere)
-- **Minimal interaction, maximum visibility** design philosophy
-
----
-
-## Installation
-
-### Windows
-Download the EXE from the [Releases Page](https://github.com/ashwin-nat/pits-n-giggles/releases).
-
-### macOS
-Build from source (macOS executables require mac hardware).
-See **[RUNNING.md](docs/RUNNING.md)**.
-
-### Manual / Source Installation
-- How to run → **[RUNNING.md](docs/RUNNING.md)**
-- How to build → **[BUILDING.md](docs/BUILDING.md)**
-
----
-
-## Screenshots
-
-### Main Dashboard
-![Main UI](screenshots/main-ui.png)
-
-### Lap Times
-![Lap Times](screenshots/lap-times-modal-ss.png)
-
-### Tyre Stint
-![Tyre Stint](screenshots/tyre-stint-modal-ss.png)
-
-### Stream Overlay Example
-![Stream Overlay](screenshots/png-stream-overlay.png)
-
-### Launcher
-![Launcher](screenshots/launcher.png)
-
-### Position History
-![Position History](screenshots/position-history.png)
-
-### Tyre Stint History
-![Tyre Stint History](screenshots/tyre-stint-history.png)
-
----
-
-## Architecture
-![Architecture Diagram](docs/arch-diagram.png)
-
-## Documentation
-Full guides & documentation:
-  https://www.pitsngiggles.com/blog
-
----
-
-## Contributing
-Issues and PRs are welcome! Continuous development, minus the FIA politics.
-
-## License
-MIT License.
+**Happy Racing! 🏁**

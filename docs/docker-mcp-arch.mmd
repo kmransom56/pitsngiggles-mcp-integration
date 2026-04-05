@@ -1,0 +1,218 @@
+%%{ init : { "theme" : "base", "themeVariables": {
+  "background": "#0b1020",
+  "primaryColor": "#1f6feb",
+  "primaryTextColor": "#e6edf3",
+  "secondaryColor": "#8250df",
+  "tertiaryColor": "#3fb950",
+  "lineColor": "#8b949e",
+  "edgeLabelBackground": "#0b1020",
+  "fontFamily": "Inter, JetBrains Mono, sans-serif",
+  "fontSize": "14px",
+  "clusterBkg": "#0d1117",
+  "clusterBorder": "#30363d"
+}} }%%
+
+%% ---------------------------------------------------------------------------
+%% pits_n_giggles + MCP Docker Integration — Full Architecture
+%% Visual style: dark, neon-accented, left-to-right narrative flow
+%% Updated: Docker MCP Server with Nginx Reverse Proxy
+%% ---------------------------------------------------------------------------
+flowchart LR
+
+%% ===========================================================================
+%% External Systems
+%% ===========================================================================
+subgraph EXTERNAL[" External Systems"]
+  direction TB
+  F1_SIM[" F1 Simulator (F1 23/24)"]
+  EXT_TGT[" External Targets"]
+end
+
+%% ===========================================================================
+%% Core Telemetry Stack (Pits N Giggles)
+%% ===========================================================================
+subgraph CORE[" Pits N Giggles Telemetry Core"]
+  direction TB
+
+  subgraph TELEMETRY[" Telemetry Ingest"]
+    direction TB
+    UDP_RECV["UDP Receiver :20777"]
+    PARSERS["Packet Parsers"]
+    PACKET_FWD["Packet Forwarder"]
+  end
+
+  subgraph STATE[" State & Computation"]
+    direction TB
+    COMP_ENGINE["Computation Engine"]
+    SHARED_STATE["Shared State"]
+    API_INTF["State Interface"]
+  end
+
+  subgraph INTF[" Core Interfaces"]
+    direction TB
+    HTTP["HTTP Server :4768"]
+    SOCKETIO["Socket.IO"]
+    ZMQ_PUB["ZMQ Publisher"]
+    IPC["IPC Server"]
+  end
+end
+
+%% ===========================================================================
+%% Docker MCP Integration Stack
+%% ===========================================================================
+subgraph DOCKER[" Docker MCP Stack"]
+  direction TB
+  
+  subgraph MCP_CONTAINER[" MCP Server Container"]
+    direction TB
+    MCP_API["FastAPI Server :8765"]
+    F1_AGENT["F1 Race Engineer AI"]
+    TELEMETRY_ANALYZER["Telemetry Analyzer"]
+    WS_HANDLER["WebSocket Handler"]
+  end
+  
+  subgraph NGINX_CONTAINER[" Nginx Reverse Proxy"]
+    direction TB
+    NGINX_SSL["SSL/TLS :443"]
+    NGINX_HTTP["HTTP :80"]
+    NGINX_ROUTER["Request Router"]
+  end
+  
+  DOCKER_NETWORK[" Docker Bridge Network"]
+end
+
+%% ===========================================================================
+%% Web UI Layer
+%% ===========================================================================
+subgraph UI[" Web Clients"]
+  direction TB
+  STRATEGY_CENTER[" Strategy Center + AI Chat"]
+  ENG_VIEW[" Engineer Dashboard"]
+  DRV_VIEW[" Driver Dashboard"]
+  STREAM_OVERLAY[" Stream Overlay"]
+  VOICE_STRATEGY[" Voice Strategy Center"]
+end
+
+%% ===========================================================================
+%% Voice Layer (Browser-based)
+%% ===========================================================================
+subgraph VOICE[" Voice Layer (Browser)"]
+  direction TB
+  STT["Speech-to-Text (Web API)"]
+  TTS["Text-to-Speech (Web API)"]
+end
+
+%% ===========================================================================
+%% External AI Clients (Optional LLM)
+%% ===========================================================================
+subgraph LLM[" External LLM Providers (Optional)"]
+  direction TB
+  OPENAI[" OpenAI GPT-4"]
+  CLAUDE[" Anthropic Claude"]
+  OLLAMA[" Ollama (Local)"]
+  AZURE[" Azure OpenAI"]
+end
+
+%% ===========================================================================
+%% Message Distribution
+%% ===========================================================================
+subgraph PITWALL[" PitWall Broker"]
+  direction TB
+  ZMQ_PROXY["ZMQ Proxy"]
+end
+
+%% ===========================================================================
+%% HUD Subsystem
+%% ===========================================================================
+subgraph HUD[" HUD Subsystem"]
+  direction TB
+  HUD_SUB["ZMQ Subscriber"]
+  HUD_SOCKETIO["Socket.IO"]
+  HUD_QT["Qt Overlays"]
+end
+
+%% ===========================================================================
+%% Primary Telemetry Flow
+%% ===========================================================================
+F1_SIM ==>|UDP :20777| UDP_RECV
+UDP_RECV ==> PARSERS ==> COMP_ENGINE ==> SHARED_STATE
+UDP_RECV -.->|Forward| PACKET_FWD -.-> EXT_TGT
+
+%% ===========================================================================
+%% Core State Distribution
+%% ===========================================================================
+SHARED_STATE ==> API_INTF
+API_INTF ==> HTTP
+API_INTF ==> SOCKETIO
+API_INTF ==> ZMQ_PUB
+
+%% ===========================================================================
+%% ZMQ Low-Latency Distribution
+%% ===========================================================================
+ZMQ_PUB ==> ZMQ_PROXY ==> HUD_SUB ==> HUD_QT
+
+%% ===========================================================================
+%% Socket.IO to Web UI
+%% ===========================================================================
+SOCKETIO ==> HUD_SOCKETIO ==> HUD_QT
+SOCKETIO ==> DRV_VIEW
+SOCKETIO ==> ENG_VIEW
+SOCKETIO ==> STREAM_OVERLAY
+
+%% ===========================================================================
+%% Docker MCP Integration Flow
+%% ===========================================================================
+HTTP ==>|Proxy /telemetry/| NGINX_ROUTER
+NGINX_ROUTER ==>|SSL/HTTPS| STRATEGY_CENTER
+NGINX_ROUTER ==>|/mcp/| MCP_API
+
+MCP_API <--> F1_AGENT
+MCP_API <--> TELEMETRY_ANALYZER
+MCP_API <--> WS_HANDLER
+
+STRATEGY_CENTER <-->|WebSocket /mcp/ws| WS_HANDLER
+STRATEGY_CENTER <-->|HTTP POST /mcp/chat| MCP_API
+
+F1_AGENT -.->|Optional LLM| OPENAI
+F1_AGENT -.->|Optional LLM| CLAUDE
+F1_AGENT -.->|Optional LLM| OLLAMA
+F1_AGENT -.->|Optional LLM| AZURE
+
+%% ===========================================================================
+%% Voice Integration
+%% ===========================================================================
+SOCKETIO ==> VOICE_STRATEGY
+VOICE_STRATEGY <--> STT
+VOICE_STRATEGY <--> TTS
+VOICE_STRATEGY <-->|WebSocket| WS_HANDLER
+
+%% ===========================================================================
+%% Docker Network Connections
+%% ===========================================================================
+MCP_API -.->|Bridge Network| DOCKER_NETWORK
+NGINX_ROUTER -.->|Bridge Network| DOCKER_NETWORK
+
+%% ===========================================================================
+%% Styling
+%% ===========================================================================
+classDef external fill:#ff7b72,stroke:#ff7b72,color:#0b1020,font-weight:bold
+classDef core fill:#1f6feb,stroke:#58a6ff,color:#e6edf3,font-weight:bold
+classDef docker fill:#00d4ff,stroke:#00f2ff,color:#0b1020,font-weight:bold
+classDef mcp fill:#a855f7,stroke:#c084fc,color:#0b1020,font-weight:bold
+classDef nginx fill:#009639,stroke:#00c853,color:#e6edf3,font-weight:bold
+classDef pitwall fill:#8250df,stroke:#a371f7,color:#e6edf3,font-weight:bold
+classDef hud fill:#3fb950,stroke:#56d364,color:#0b1020,font-weight:bold
+classDef ui fill:#db6d28,stroke:#ffa657,color:#0b1020,font-weight:bold
+classDef voice fill:#10b981,stroke:#34d399,color:#0b1020,font-weight:bold
+classDef llm fill:#f778ba,stroke:#ff9dd9,color:#0b1020,font-weight:bold
+
+class F1_SIM,EXT_TGT external
+class CORE,TELEMETRY,STATE,INTF core
+class DOCKER,DOCKER_NETWORK docker
+class MCP_CONTAINER,MCP_API,F1_AGENT,TELEMETRY_ANALYZER,WS_HANDLER mcp
+class NGINX_CONTAINER,NGINX_SSL,NGINX_HTTP,NGINX_ROUTER nginx
+class PITWALL pitwall
+class HUD hud
+class UI ui
+class VOICE voice
+class LLM,OPENAI,CLAUDE,OLLAMA,AZURE llm

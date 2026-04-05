@@ -1,0 +1,73 @@
+# F1 Race Engineer MCP Server - Docker Compose Configuration
+version: '3.8'
+
+services:
+  # MCP Server - F1 Race Engineer AI
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: f1-race-engineer-mcp
+    environment:
+      - MCP_PORT=8765
+      - TELEMETRY_HOST=pits-n-giggles
+      - TELEMETRY_PORT=4768
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LOG_LEVEL=INFO
+    ports:
+      - "8765:8765"
+    networks:
+      - f1-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - mcp-data:/app/data
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: f1-nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - f1-network
+    depends_on:
+      - mcp-server
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - nginx-logs:/var/log/nginx
+      - ssl-certs:/etc/nginx/ssl
+
+  # Pits N Giggles Telemetry Server (optional - if running in Docker)
+  # Uncomment if you want to run Pits N Giggles in Docker
+  # pits-n-giggles:
+  #   image: pitsngiggles:latest
+  #   container_name: pits-n-giggles
+  #   ports:
+  #     - "4768:4768"
+  #   networks:
+  #     - f1-network
+  #   restart: unless-stopped
+  #   volumes:
+  #     - telemetry-data:/app/data
+
+networks:
+  f1-network:
+    driver: bridge
+
+volumes:
+  mcp-data:
+  nginx-logs:
+  ssl-certs:
+  # telemetry-data:
