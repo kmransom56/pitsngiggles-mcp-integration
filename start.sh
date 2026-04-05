@@ -93,21 +93,25 @@ fi
 source .venv/bin/activate
 
 # Install dependencies
-echo "Installing dependencies with uv (fast)..."
+echo "Installing dependencies..."
 if [ "$USE_UV" = true ]; then
     # Fix uv cache permissions if needed
     mkdir -p ~/.cache/uv 2>/dev/null || true
     chmod 755 ~/.cache/uv 2>/dev/null || true
     
     # Install main dependencies
-    uv pip install --system -r requirements.txt 2>/dev/null || echo "Main dependencies already installed"
+    .venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
     
     # Install MCP server dependencies
     if [ -f "mcp_server/requirements.txt" ]; then
-        uv pip install --system -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
+        .venv/bin/pip install --quiet -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
     fi
 else
-    echo "Warning: uv not found, some features may not work"
+    # Fallback to pip
+    .venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
+    if [ -f "mcp_server/requirements.txt" ]; then
+        .venv/bin/pip install --quiet -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
+    fi
 fi
 
 echo -e "${GREEN}${CHECK} Dependencies installed${NC}"
@@ -194,7 +198,7 @@ echo -e "${BLUE}[4/5] Starting services...${NC}"
 
 # Start main Pits n' Giggles application
 echo "Starting Pits n' Giggles backend..."
-PYTHONPATH="${PWD}:${PYTHONPATH}" python3 -m apps.backend.backend_main &
+PYTHONPATH="${PWD}:${PYTHONPATH}" .venv/bin/python -m apps.backend &
 BACKEND_PID=$!
 echo -e "${GREEN}${CHECK} Backend started (PID: ${BACKEND_PID})${NC}"
 
@@ -224,7 +228,7 @@ if [ "$START_MCP" = true ]; then
     else
         # Start MCP server natively
         source .env.mcp 2>/dev/null || true
-        cd mcp_server && python3 server.py &
+        cd mcp_server && ../.venv/bin/python server.py &
         MCP_PID=$!
         cd ..
         echo -e "${GREEN}${CHECK} MCP server started (PID: ${MCP_PID})${NC}"

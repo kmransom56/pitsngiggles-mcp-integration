@@ -30,11 +30,8 @@ dependencies = [
 
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
-package-mode = false
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 [tool.poetry.group.dev.dependencies]
 tqdm = "^4.67.1"
 deepdiff = "^8.4.2"
