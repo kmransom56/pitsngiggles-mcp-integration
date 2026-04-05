@@ -1,5 +1,6 @@
 [project]
 name = "pits-n-giggles"
+version = "1.0.0"
 description = "F1 Sim Racing Telemetry Analysis"
 authors = [
     {name = "Ashwin Natarajan",email = "ashwin.nat@gmail.com"}

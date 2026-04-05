@@ -93,15 +93,16 @@ fi
 source .venv/bin/activate
 
 # Install dependencies
-echo "Installing dependencies with ${USE_UV:+uv}${USE_UV:-pip}..."
+echo "Installing dependencies..."
 if [ "$USE_UV" = true ]; then
     # Fix uv cache permissions if needed
     mkdir -p ~/.cache/uv 2>/dev/null || true
-    chmod 755 ~/.cache/uv 2>/dev/null || true
-    uv pip install --quiet -e . 2>/dev/null || pip install --quiet -e .
+    chmod -R 755 ~/.cache/uv 2>/dev/null || true
+    
+    # Install dependencies directly (no editable mode needed for this app)
+    cd mcp_server && uv pip install -r requirements.txt && cd .. || { echo "Failed to install MCP dependencies"; }
 else
-    pip install --quiet --upgrade pip
-    pip install --quiet -e .
+    echo "Warning: uv not found, some features may not work"
 fi
 
 echo -e "${GREEN}${CHECK} Dependencies installed${NC}"
@@ -188,7 +189,7 @@ echo -e "${BLUE}[4/5] Starting services...${NC}"
 
 # Start main Pits n' Giggles application
 echo "Starting Pits n' Giggles backend..."
-python3 -m apps.backend.backend_main &
+PYTHONPATH="${PWD}:${PYTHONPATH}" python3 -m apps.backend.backend_main &
 BACKEND_PID=$!
 echo -e "${GREEN}${CHECK} Backend started (PID: ${BACKEND_PID})${NC}"
 
@@ -218,8 +219,9 @@ if [ "$START_MCP" = true ]; then
     else
         # Start MCP server natively
         source .env.mcp 2>/dev/null || true
-        python3 -m mcp_server.server &
+        cd mcp_server && python3 server.py &
         MCP_PID=$!
+        cd ..
         echo -e "${GREEN}${CHECK} MCP server started (PID: ${MCP_PID})${NC}"
     fi
 fi
