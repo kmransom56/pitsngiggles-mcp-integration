@@ -15,6 +15,9 @@ launch.json
 build/*
 dist/*
 png-venv/
+.venv/
+*.pid
+.copilot/
 .vercel
 *yappi*
 *.part

@@ -96,21 +96,35 @@ source .venv/bin/activate
 echo "Installing dependencies..."
 if [ "$USE_UV" = true ]; then
     # Fix uv cache permissions if needed
-    mkdir -p ~/.cache/uv 2>/dev/null || true
-    chmod 755 ~/.cache/uv 2>/dev/null || true
+    UVCACHE="$HOME/.cache/uv"
+    if [ -d "$UVCACHE" ]; then
+        chmod -R 755 "$UVCACHE" 2>/dev/null || true
+    else
+        mkdir -p "$UVCACHE" 2>/dev/null || true
+    fi
+    
+    # Install using uv with better error handling
+    echo "Installing with uv (fast mode)..."
+    if [ -f "requirements.txt" ]; then
+        uv pip install -r requirements.txt 2>/dev/null || .venv/bin/pip install -q -r requirements.txt || true
+    fi
     
     # Install main dependencies
-    .venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
+    uv pip install jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || .venv/bin/pip install -q jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
     
     # Install MCP server dependencies
     if [ -f "mcp_server/requirements.txt" ]; then
-        .venv/bin/pip install --quiet -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
+        uv pip install -r mcp_server/requirements.txt 2>/dev/null || .venv/bin/pip install -q -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
     fi
 else
     # Fallback to pip
-    .venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
+    echo "Installing with pip..."
+    if [ -f "requirements.txt" ]; then
+        .venv/bin/pip install -q -r requirements.txt 2>/dev/null || true
+    fi
+    .venv/bin/pip install -q jinja2 python-socketio quart gevent psutil pydantic uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson 2>/dev/null || echo "Main dependencies already installed"
     if [ -f "mcp_server/requirements.txt" ]; then
-        .venv/bin/pip install --quiet -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
+        .venv/bin/pip install -q -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
     fi
 fi
 
