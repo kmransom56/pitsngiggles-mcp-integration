@@ -96,6 +96,16 @@ subgraph UI[" Web Clients"]
   DRV_VIEW[" Driver Dashboard"]
   ENG_VIEW[" Engineer Dashboard"]
   STRATEGY_CENTER[" Strategy Center (AI)"]
+  VOICE_STRATEGY[" Voice Strategy Center"]
+end
+
+%% ===========================================================================
+%% Voice Layer
+%% ===========================================================================
+subgraph VOICE[" Voice Layer (Browser)"]
+  direction TB
+  STT["Speech-to-Text (Web API)"]
+  TTS["Text-to-Speech (Web API)"]
 end
 
 %% ===========================================================================
@@ -145,6 +155,15 @@ SOCKETIO ==> STREAM_OVERLAY
 SOCKETIO ==> DRV_VIEW
 SOCKETIO ==> ENG_VIEW
 SOCKETIO ==> STRATEGY_CENTER
+SOCKETIO ==> VOICE_STRATEGY
+
+%% ===========================================================================
+%% Voice Layer Integration
+%% ===========================================================================
+VOICE_STRATEGY --> STT
+STT --> VOICE_STRATEGY
+VOICE_STRATEGY --> TTS
+TTS --> VOICE_STRATEGY
 
 %% ===========================================================================
 %% MCP AI Distribution
@@ -175,6 +194,7 @@ classDef save fill:#d29922,stroke:#f2cc60,color:#0b1020,font-weight:bold
 classDef ui fill:#db6d28,stroke:#ffa657,color:#0b1020,font-weight:bold
 classDef ai fill:#f778ba,stroke:#ff9dd9,color:#0b1020,font-weight:bold
 classDef proxy fill:#79c0ff,stroke:#a5d6ff,color:#0b1020,font-weight:bold
+classDef voice fill:#10b981,stroke:#34d399,color:#0b1020,font-weight:bold
 
 class F1_SIM,EXT_TGT external
 class CORE,TELEMETRY,STATE,INTF core
@@ -184,3 +204,4 @@ class SAVE_VIEWER save
 class UI ui
 class AI ai
 class PROXY proxy
+class VOICE voice
