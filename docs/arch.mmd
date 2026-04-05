@@ -53,6 +53,7 @@ subgraph CORE[" Telemetry Core"]
     SOCKETIO["Socket.IO"]
     ZMQ_PUB["ZMQ Publisher"]
     IPC["IPC Server"]
+    MCP_SERVER["MCP Server (SSE)"]
   end
 end
 
@@ -94,6 +95,26 @@ subgraph UI[" Web Clients"]
   STREAM_OVERLAY[" Stream Overlay"]
   DRV_VIEW[" Driver Dashboard"]
   ENG_VIEW[" Engineer Dashboard"]
+  STRATEGY_CENTER[" Strategy Center (AI)"]
+end
+
+%% ===========================================================================
+%% AI Clients (MCP)
+%% ===========================================================================
+subgraph AI[" AI Clients"]
+  direction TB
+  CHATGPT[" ChatGPT Desktop"]
+  CLAUDE[" Claude Desktop"]
+  CURSOR[" Cursor IDE"]
+  CUSTOM_AI[" Custom AI Clients"]
+end
+
+%% ===========================================================================
+%% Reverse Proxy
+%% ===========================================================================
+subgraph PROXY[" Reverse Proxy"]
+  direction TB
+  NGINX[" nginx (HTTPS)"]
 end
 
 %% ===========================================================================
@@ -109,6 +130,7 @@ SHARED_STATE ==> API_INTF
 API_INTF ==> HTTP
 API_INTF ==> SOCKETIO
 API_INTF ==> ZMQ_PUB
+API_INTF ==> MCP_SERVER
 
 %% ===========================================================================
 %% ZMQ Low-Latency Distribution
@@ -122,6 +144,17 @@ SOCKETIO ==> HUD_SOCKETIO ==> HUD_QT
 SOCKETIO ==> STREAM_OVERLAY
 SOCKETIO ==> DRV_VIEW
 SOCKETIO ==> ENG_VIEW
+SOCKETIO ==> STRATEGY_CENTER
+
+%% ===========================================================================
+%% MCP AI Distribution
+%% ===========================================================================
+MCP_SERVER ==> NGINX
+NGINX ==> CHATGPT
+NGINX ==> CLAUDE
+NGINX ==> CURSOR
+NGINX ==> CUSTOM_AI
+MCP_SERVER -.-> STRATEGY_CENTER
 
 %% ===========================================================================
 %% Control & Playback Paths
@@ -140,6 +173,8 @@ classDef pitwall fill:#8250df,stroke:#a371f7,color:#e6edf3,font-weight:bold
 classDef hud fill:#3fb950,stroke:#56d364,color:#0b1020,font-weight:bold
 classDef save fill:#d29922,stroke:#f2cc60,color:#0b1020,font-weight:bold
 classDef ui fill:#db6d28,stroke:#ffa657,color:#0b1020,font-weight:bold
+classDef ai fill:#f778ba,stroke:#ff9dd9,color:#0b1020,font-weight:bold
+classDef proxy fill:#79c0ff,stroke:#a5d6ff,color:#0b1020,font-weight:bold
 
 class F1_SIM,EXT_TGT external
 class CORE,TELEMETRY,STATE,INTF core
@@ -147,3 +182,5 @@ class PITWALL pitwall
 class HUD hud
 class SAVE_VIEWER save
 class UI ui
+class AI ai
+class PROXY proxy
