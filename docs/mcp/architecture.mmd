@@ -1,0 +1,193 @@
+%%{ init : { "theme" : "base", "themeVariables": {
+  "background": "#0b1020",
+  "primaryColor": "#1f6feb",
+  "primaryTextColor": "#e6edf3",
+  "secondaryColor": "#8250df",
+  "tertiaryColor": "#3fb950",
+  "lineColor": "#8b949e",
+  "edgeLabelBackground": "#0b1020",
+  "fontFamily": "Inter, JetBrains Mono, sans-serif",
+  "fontSize": "14px",
+  "clusterBkg": "#0d1117",
+  "clusterBorder": "#30363d"
+}} }%%
+
+%% ---------------------------------------------------------------------------
+%% Pits N Giggles + MCP Integration - Complete Architecture
+%% Docker-based deployment with F1 Race Engineer AI
+%% ---------------------------------------------------------------------------
+flowchart TB
+
+%% ===========================================================================
+%% External Systems
+%% ===========================================================================
+subgraph EXTERNAL[" External Systems"]
+  direction TB
+  F1_SIM[" F1 23/24/25 Game"]
+  AI_CLIENTS[" AI Clients<br/>ChatGPT • Claude • Cursor"]
+end
+
+%% ===========================================================================
+%% Docker Environment
+%% ===========================================================================
+subgraph DOCKER[" Docker Environment (f1-network)"]
+  direction TB
+  
+  subgraph NGINX_CONTAINER[" Nginx Reverse Proxy Container"]
+    direction TB
+    NGINX[" nginx<br/>Port 80/443"]
+    SSL[" SSL/TLS<br/>Self-Signed + Production"]
+    STATIC_FILES[" Static HTML Files<br/>Strategy Center, Voice, Dashboards"]
+  end
+  
+  subgraph MCP_CONTAINER[" MCP Server Container"]
+    direction TB
+    MCP_APP[" FastAPI Server<br/>Port 8765"]
+    F1_AGENT[" F1 Race Engineer<br/>AI Agent"]
+    LLM_CLIENT[" LLM Client<br/>OpenRouter/OpenAI/Anthropic"]
+    TELEMETRY_ANALYZER[" Telemetry Analyzer<br/>Setup Diagnosis"]
+    MCP_TOOLS[" 10 MCP Tools<br/>Specialized Functions"]
+  end
+  
+  subgraph PNG_OPTIONAL[" Pits N Giggles (Optional in Docker)"]
+    direction TB
+    PNG_SERVER[" Telemetry Server<br/>Port 4768"]
+    PNG_COMPUTE[" Computation Engine<br/>Live Race Data"]
+    PNG_STATE[" State Manager<br/>Session Storage"]
+  end
+end
+
+%% ===========================================================================
+%% Host System (Alternative to Docker)
+%% ===========================================================================
+subgraph HOST[" Host System"]
+  direction TB
+  PNG_HOST[" Pits N Giggles<br/>host:4768"]
+  BROWSER[" Web Browser"]
+end
+
+%% ===========================================================================
+%% Frontend Applications
+%% ===========================================================================
+subgraph FRONTEND[" Web Frontend (Served by Nginx)"]
+  direction TB
+  STRATEGY_CENTER[" Strategy Center<br/>AI Chat Interface<br/>3 AI Modes"]
+  VOICE_STRATEGY[" Voice Strategy Center<br/>Speech-to-Text (Web API)<br/>Text-to-Speech (Web API)<br/>Push-to-Talk (Space Key)"]
+  ENG_VIEW[" Engineer Dashboard<br/>Classic Telemetry"]
+  DRV_VIEW[" Driver Dashboard<br/>Classic Telemetry"]
+  STREAM_OVERLAY[" Stream Overlay<br/>OBS Integration"]
+end
+
+%% ===========================================================================
+%% LLM Services
+%% ===========================================================================
+subgraph LLM_SERVICES[" LLM Services (Cloud)"]
+  direction TB
+  OPENROUTER[" OpenRouter<br/>Multi-Model Gateway<br/>GPT-4o-mini, Claude 3.5, Llama 3.1"]
+  OPENAI[" OpenAI<br/>GPT-4, GPT-4o<br/>GPT-4o-mini"]
+  ANTHROPIC[" Anthropic<br/>Claude 3.5 Sonnet<br/>Claude 3 Opus"]
+  GOOGLE[" Google<br/>Gemini Pro 1.5"]
+end
+
+%% ===========================================================================
+%% Data Flow: Game to Telemetry
+%% ===========================================================================
+F1_SIM ==>|UDP Packets<br/>F1 Telemetry| PNG_HOST
+F1_SIM -.->|UDP Packets| PNG_SERVER
+
+%% ===========================================================================
+%% Host Telemetry Flow
+%% ===========================================================================
+PNG_HOST ==>|Socket.IO<br/>Telemetry Stream| NGINX
+
+%% ===========================================================================
+%% Docker Internal Flow
+%% ===========================================================================
+PNG_SERVER ==> PNG_COMPUTE ==> PNG_STATE
+PNG_STATE -.->|Socket.IO| NGINX
+
+%% ===========================================================================
+%% Nginx Routing
+%% ===========================================================================
+NGINX ==>|"/api/*"<br/>Chat & WebSocket| MCP_APP
+NGINX ==>|"/mcp/*"<br/>SSE Events| MCP_APP
+NGINX ==>|"/"<br/>Frontend Pages| FRONTEND
+NGINX -.->|Proxy to Host<br/>host:4768| PNG_HOST
+
+%% ===========================================================================
+%% MCP Server Internal
+%% ===========================================================================
+MCP_APP ==> MCP_TOOLS
+MCP_TOOLS ==> TELEMETRY_ANALYZER
+TELEMETRY_ANALYZER ==> F1_AGENT
+F1_AGENT ==> LLM_CLIENT
+
+%% ===========================================================================
+%% LLM Integration
+%% ===========================================================================
+LLM_CLIENT ==>|HTTPS<br/>Chat Completion<br/>Context + Telemetry| OPENROUTER
+LLM_CLIENT -.->|Direct API<br/>Optional| OPENAI
+LLM_CLIENT -.->|Via OpenRouter| ANTHROPIC
+LLM_CLIENT -.->|Via OpenRouter| GOOGLE
+
+%% ===========================================================================
+%% Browser Connections
+%% ===========================================================================
+BROWSER ==>|HTTPS<br/>https://localhost| NGINX
+NGINX ==>|Serve HTML| STRATEGY_CENTER
+NGINX ==>|Serve HTML| VOICE_STRATEGY
+NGINX ==>|Serve HTML| ENG_VIEW
+NGINX ==>|Serve HTML| DRV_VIEW
+NGINX ==>|Serve HTML| STREAM_OVERLAY
+
+%% ===========================================================================
+%% Strategy Center Integration
+%% ===========================================================================
+STRATEGY_CENTER ==>|POST /api/chat<br/>with Telemetry| MCP_APP
+STRATEGY_CENTER ==>|WebSocket /api/ws| MCP_APP
+STRATEGY_CENTER ==>|Fetch Telemetry<br/>/telemetry-info| NGINX
+
+%% ===========================================================================
+%% Voice Integration (Browser-Based)
+%% ===========================================================================
+VOICE_STRATEGY ==>|Push-to-Talk (Space)<br/>Web Speech API STT<br/>Local Processing| MCP_APP
+MCP_APP ==>|AI Response Text| VOICE_STRATEGY
+VOICE_STRATEGY -.->|Web Speech API TTS<br/>Local Synthesis| BROWSER
+
+%% ===========================================================================
+%% AI Client Integration (MCP Protocol)
+%% ===========================================================================
+AI_CLIENTS ==>|SSE Connection<br/>GET /mcp/sse| NGINX
+NGINX ==>|Forward SSE| MCP_APP
+MCP_APP ==>|MCP Tools Response| AI_CLIENTS
+
+%% ===========================================================================
+%% Response Flow
+%% ===========================================================================
+OPENROUTER ==>|AI Response<br/>Setup Recommendations| LLM_CLIENT
+LLM_CLIENT ==> F1_AGENT
+F1_AGENT ==>|Formatted Response<br/>+ Analysis<br/>+ Recommendations<br/>+ Telemetry Insights| MCP_APP
+MCP_APP ==>|JSON Response<br/>POST /api/chat| NGINX
+NGINX ==>|HTTPS| STRATEGY_CENTER
+NGINX ==>|HTTPS + Voice| VOICE_STRATEGY
+
+%% ===========================================================================
+%% Styling
+%% ===========================================================================
+classDef external fill:#ff7b72,stroke:#ff7b72,color:#0b1020,font-weight:bold
+classDef docker fill:#1f6feb,stroke:#58a6ff,color:#e6edf3,font-weight:bold
+classDef host fill:#3fb950,stroke:#56d364,color:#0b1020,font-weight:bold
+classDef frontend fill:#db6d28,stroke:#ffa657,color:#0b1020,font-weight:bold
+classDef llm fill:#f778ba,stroke:#ff9dd9,color:#0b1020,font-weight:bold
+classDef mcp fill:#8250df,stroke:#a371f7,color:#e6edf3,font-weight:bold
+classDef nginx fill:#79c0ff,stroke:#a5d6ff,color:#0b1020,font-weight:bold
+classDef voice fill:#10b981,stroke:#34d399,color:#0b1020,font-weight:bold
+
+class F1_SIM,AI_CLIENTS external
+class DOCKER,NGINX_CONTAINER,MCP_CONTAINER,PNG_OPTIONAL docker
+class HOST,PNG_HOST,BROWSER host
+class FRONTEND,STRATEGY_CENTER,ENG_VIEW,DRV_VIEW,STREAM_OVERLAY frontend
+class VOICE_STRATEGY voice
+class LLM_SERVICES,OPENROUTER,OPENAI,ANTHROPIC,GOOGLE llm
+class MCP_APP,F1_AGENT,LLM_CLIENT,TELEMETRY_ANALYZER,MCP_TOOLS mcp
+class NGINX,SSL,STATIC_FILES nginx

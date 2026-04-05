@@ -1,72 +1,87 @@
 #!/bin/bash
-# Pits n' Giggles - One-Command Startup with F1 Race Engineer
-# This script starts everything you need: telemetry app + MCP server + nginx reverse proxy
+# Pits n' Giggles Unified Startup Script
+# Starts both the main application and optional MCP server
 
 set -e
 
+# Colors and symbols
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+CHECK="✓"
+CROSS="✗"
+ARROW="→"
+
+# Banner
+echo ""
 echo "╔═══════════════════════════════════════════════════════════════╗"
 echo "║     Pits n' Giggles - F1 Race Engineer Starting...           ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+# Detect OS
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="Linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    OS="macOS"
+elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+    OS="Windows"
+else
+    OS="Unknown"
+fi
 
-# Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+echo -e "${BLUE}[1/5] Checking prerequisites...${NC}"
 
-# Function to check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Function to check if port is in use
-port_in_use() {
-    lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1
-}
-
-echo -e "${YELLOW}[1/5]${NC} Checking prerequisites..."
-
-# Check Python 3
-if ! command_exists python3; then
-    echo -e "${RED}✗ Python 3 not found. Please install Python 3.8+${NC}"
+# Check Python
+if command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    echo -e "${GREEN}${CHECK} Python 3 found${NC} (${PYTHON_VERSION})"
+else
+    echo -e "${RED}${CROSS} Python 3 not found${NC}"
+    echo "Please install Python 3.9 or higher"
     exit 1
 fi
-echo -e "${GREEN}✓${NC} Python 3 found"
 
-# Check if using uv or pip
-if command_exists uv; then
-    PYTHON_MANAGER="uv"
-    echo -e "${GREEN}✓${NC} uv package manager found (fast mode)"
+# Check uv package manager (optional but faster)
+if command -v uv &> /dev/null; then
+    echo -e "${GREEN}${CHECK} uv package manager found${NC} (fast mode)"
+    USE_UV=true
 else
-    PYTHON_MANAGER="pip"
-    echo -e "${GREEN}✓${NC} pip package manager found"
+    echo -e "${YELLOW}${ARROW} uv not found, using pip${NC} (slower)"
+    USE_UV=false
 fi
 
-# Check nginx
-if ! command_exists nginx; then
-    echo -e "${YELLOW}⚠${NC} nginx not found - MCP will only be available via HTTP (port 4768)"
-    echo "  Install nginx for HTTPS access: sudo apt install nginx"
-    NGINX_AVAILABLE=false
-else
-    echo -e "${GREEN}✓${NC} nginx found"
+# Check nginx (for MCP)
+if command -v nginx &> /dev/null; then
+    echo -e "${GREEN}${CHECK} nginx found${NC}"
     NGINX_AVAILABLE=true
+else
+    echo -e "${YELLOW}${ARROW} nginx not found${NC} (MCP HTTPS will be unavailable)"
+    NGINX_AVAILABLE=false
 fi
 
-# Check Node.js (for mcp-remote in Claude Desktop)
-if command_exists node; then
-    echo -e "${GREEN}✓${NC} Node.js found (v$(node -v))"
+# Check Node.js (for frontend builds)
+if command -v node &> /dev/null; then
+    NODE_VERSION=$(node --version 2>&1)
+    echo -e "${GREEN}${CHECK} Node.js found${NC} (${NODE_VERSION})"
 else
-    echo -e "${YELLOW}⚠${NC} Node.js not found - Claude Desktop integration won't work"
-    echo "  Install: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
+    echo -e "${YELLOW}${ARROW} Node.js not found${NC} (optional)"
+fi
+
+# Check Docker
+if command -v docker &> /dev/null; then
+    echo -e "${GREEN}${CHECK} Docker found${NC}"
+    DOCKER_AVAILABLE=true
+else
+    echo -e "${YELLOW}${ARROW} Docker not found${NC} (MCP Docker mode unavailable)"
+    DOCKER_AVAILABLE=false
 fi
 
 echo ""
-echo -e "${YELLOW}[2/5]${NC} Setting up Python environment..."
+echo -e "${BLUE}[2/5] Setting up Python environment...${NC}"
 
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
@@ -77,208 +92,221 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
-# Install/upgrade dependencies
-if [ "$PYTHON_MANAGER" = "uv" ]; then
-    echo "Installing dependencies with uv (fast)..."
-    uv pip install --upgrade pip
-    uv pip install -r requirements.txt
+# Install dependencies
+echo "Installing dependencies with ${USE_UV:+uv}${USE_UV:-pip}..."
+if [ "$USE_UV" = true ]; then
+    # Fix uv cache permissions if needed
+    mkdir -p ~/.cache/uv
+    chmod 755 ~/.cache/uv
+    uv pip install --quiet -e .
 else
-    echo "Installing dependencies with pip..."
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
+    pip install --quiet --upgrade pip
+    pip install --quiet -e .
 fi
 
-echo -e "${GREEN}✓${NC} Dependencies installed"
+echo -e "${GREEN}${CHECK} Dependencies installed${NC}"
 
 echo ""
-echo -e "${YELLOW}[3/5]${NC} Configuring nginx reverse proxy..."
+echo -e "${BLUE}[3/5] Checking MCP configuration...${NC}"
 
-if [ "$NGINX_AVAILABLE" = true ]; then
-    # Check if nginx config exists
-    if [ ! -f "/etc/nginx/sites-available/pits-n-giggles-mcp" ]; then
-        echo "nginx config not found. Creating..."
-        
-        # Create nginx config
-        sudo tee /etc/nginx/sites-available/pits-n-giggles-mcp > /dev/null << 'NGINX_CONFIG'
-server {
-    listen 8443 ssl;
-    server_name localhost;
-
-    # Self-signed certificate (create if not exists)
-    ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
-    ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-
-    location /mcp {
-        proxy_pass http://127.0.0.1:4768/mcp;
-        proxy_http_version 1.1;
-        
-        # Server-Sent Events support
-        proxy_set_header Connection '';
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 86400s;
-        
-        # Headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # CORS headers
-        add_header Access-Control-Allow-Origin *;
-        add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS';
-        add_header Access-Control-Allow-Headers 'Content-Type, Authorization';
-    }
-}
-NGINX_CONFIG
-
-        # Create self-signed certificate if it doesn't exist
-        if [ ! -f "/etc/nginx/ssl/nginx-selfsigned.crt" ]; then
-            echo "Creating self-signed SSL certificate..."
-            sudo mkdir -p /etc/nginx/ssl
-            sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-                -keyout /etc/nginx/ssl/nginx-selfsigned.key \
-                -out /etc/nginx/ssl/nginx-selfsigned.crt \
-                -subj "/C=US/ST=State/L=City/O=PitsNGiggles/CN=localhost"
-        fi
-        
-        # Enable site
-        sudo ln -sf /etc/nginx/sites-available/pits-n-giggles-mcp /etc/nginx/sites-enabled/
-        
-        # Test nginx config
-        sudo nginx -t && sudo systemctl reload nginx
-        
-        echo -e "${GREEN}✓${NC} nginx configured and reloaded"
-    else
-        echo -e "${GREEN}✓${NC} nginx already configured"
-        
-        # Make sure nginx is running
-        if ! systemctl is-active --quiet nginx; then
-            echo "Starting nginx..."
-            sudo systemctl start nginx
-        fi
-    fi
-else
-    echo -e "${YELLOW}⚠${NC} Skipping nginx setup (not installed)"
-fi
-
+# Ask about MCP server
 echo ""
-echo -e "${YELLOW}[4/5]${NC} Starting Pits n' Giggles backend..."
+echo "Do you want to start the MCP server (F1 AI Race Engineer)?"
+echo "  - Enables AI chat in Strategy Center"
+echo "  - Allows ChatGPT/Claude to analyze telemetry"
+echo "  - Includes voice features (speech-to-text, text-to-speech)"
+echo ""
+read -p "Start MCP server? (y/N): " -n 1 -r
+echo ""
 
-# Check if app is already running
-if port_in_use 4768; then
-    echo -e "${YELLOW}⚠${NC} Port 4768 already in use - app may already be running"
-    echo "  Kill existing process? (y/n)"
-    read -r response
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        pkill -f "python.*apps.launcher" || true
-        sleep 2
-    else
-        echo "Keeping existing process"
-        SKIP_LAUNCH=true
-    fi
-fi
-
-if [ "$SKIP_LAUNCH" != true ]; then
-    # Start the application in background
-    export PYTHONPATH="$SCRIPT_DIR"
-    nohup python -O -m apps.launcher > pits-n-giggles.log 2>&1 &
-    APP_PID=$!
-    echo $APP_PID > .app.pid
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    START_MCP=true
     
-    # Wait for app to start
-    echo "Waiting for backend to start..."
-    for i in {1..30}; do
-        if port_in_use 4768; then
-            echo -e "${GREEN}✓${NC} Backend started (PID: $APP_PID)"
-            break
+    # Check if .env.mcp exists
+    if [ ! -f .env.mcp ]; then
+        echo -e "${YELLOW}Creating .env.mcp from example...${NC}"
+        cp .env.mcp.example .env.mcp
+        
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}MCP Server Configuration Needed${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo "For full AI functionality, you need an LLM API key."
+        echo ""
+        echo "Options:"
+        echo "  1. OpenRouter (recommended) - https://openrouter.ai/keys"
+        echo "     - Access to multiple models (GPT-4, Claude, etc.)"
+        echo "     - Free tier available"
+        echo ""
+        echo "  2. OpenAI - https://platform.openai.com/api-keys"
+        echo "     - Direct GPT-4 access"
+        echo "     - Pay-per-use"
+        echo ""
+        echo "  3. Skip for now - Basic telemetry analysis only"
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        read -p "Do you have an API key to configure now? (y/N): " -n 1 -r
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo ""
+            read -p "Enter your API key: " API_KEY
+            
+            # Update .env.mcp with the API key
+            sed -i "s/LLM_API_KEY=your_api_key_here/LLM_API_KEY=${API_KEY}/" .env.mcp
+            
+            echo -e "${GREEN}${CHECK} API key configured${NC}"
+        else
+            echo -e "${YELLOW}${ARROW} Skipping API key configuration${NC}"
+            echo "   MCP server will run with telemetry analysis only"
+            echo "   Edit .env.mcp later to add your API key"
         fi
-        sleep 1
-        if [ $i -eq 30 ]; then
-            echo -e "${RED}✗${NC} Backend failed to start. Check pits-n-giggles.log"
-            exit 1
+    fi
+    
+    # Choose Docker or native mode
+    if [ "$DOCKER_AVAILABLE" = true ]; then
+        echo ""
+        read -p "Run MCP in Docker? (recommended) (Y/n): " -n 1 -r
+        echo ""
+        
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            MCP_MODE="docker"
+        else
+            MCP_MODE="native"
         fi
-    done
+    else
+        MCP_MODE="native"
+    fi
+else
+    START_MCP=false
 fi
 
 echo ""
-echo -e "${YELLOW}[5/5]${NC} Verifying services..."
+echo -e "${BLUE}[4/5] Starting services...${NC}"
 
-# Check HTTP endpoint
-if curl -s http://localhost:4768/race-info > /dev/null; then
-    echo -e "${GREEN}✓${NC} HTTP telemetry server: http://localhost:4768"
-else
-    echo -e "${RED}✗${NC} HTTP telemetry server not responding"
-fi
+# Start main Pits n' Giggles application
+echo "Starting Pits n' Giggles backend..."
+python3 -m apps.backend.backend_main &
+BACKEND_PID=$!
+echo -e "${GREEN}${CHECK} Backend started (PID: ${BACKEND_PID})${NC}"
 
-# Check MCP endpoint (HTTP)
-if curl -s http://localhost:4768/mcp > /dev/null 2>&1; then
-    echo -e "${GREEN}✓${NC} MCP server (HTTP): http://localhost:4768/mcp"
-else
-    echo -e "${YELLOW}⚠${NC} MCP server (HTTP) not responding yet"
-fi
+# Wait a moment for backend to initialize
+sleep 2
 
-# Check MCP endpoint (HTTPS via nginx)
-if [ "$NGINX_AVAILABLE" = true ]; then
-    if curl -k -s https://localhost:8443/mcp > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} MCP server (HTTPS): https://localhost:8443/mcp"
+# Start MCP server if requested
+if [ "$START_MCP" = true ]; then
+    echo ""
+    echo "Starting MCP server (${MCP_MODE} mode)..."
+    
+    if [ "$MCP_MODE" = "docker" ]; then
+        # Generate SSL certificate if needed
+        if [ ! -f ssl/cert.pem ]; then
+            echo "Generating self-signed SSL certificate..."
+            mkdir -p ssl
+            openssl req -x509 -newkey rsa:4096 -nodes \
+                -keyout ssl/key.pem \
+                -out ssl/cert.pem \
+                -days 365 \
+                -subj "/C=US/ST=State/L=City/O=PitsNGiggles/CN=localhost" 2>/dev/null
+        fi
+        
+        # Start with Docker Compose
+        docker-compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+        echo -e "${GREEN}${CHECK} MCP server started (Docker)${NC}"
     else
-        echo -e "${YELLOW}⚠${NC} MCP server (HTTPS) not responding"
+        # Start MCP server natively
+        source .env.mcp 2>/dev/null || true
+        python3 -m mcp_server.server &
+        MCP_PID=$!
+        echo -e "${GREEN}${CHECK} MCP server started (PID: ${MCP_PID})${NC}"
     fi
 fi
 
 echo ""
-echo "╔═══════════════════════════════════════════════════════════════╗"
-echo "║     ✓ Pits n' Giggles is Running!                            ║"
-echo "╚═══════════════════════════════════════════════════════════════╝"
+echo -e "${BLUE}[5/5] Initialization complete!${NC}"
+
+# Display access information
 echo ""
-echo "🏎️  Access Points:"
-echo "  • Telemetry Dashboard:  http://localhost:4768"
-echo "  • Engineer View:        http://localhost:4768/eng-view"
-echo "  • F1 Race Engineer:     http://localhost:4768/strategy-center"
+echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║                     🏎️  Ready to Race!                        ║${NC}"
+echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "🤖 AI Integration:"
-if [ "$NGINX_AVAILABLE" = true ]; then
-    echo "  • MCP Endpoint (HTTPS): https://localhost:8443/mcp"
-    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/mcp"
-else
-    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/mcp"
+echo -e "${GREEN}Main Application:${NC}"
+echo "  ${ARROW} Web UI: http://localhost:4768"
+echo "  ${ARROW} Driver View: http://localhost:4768/"
+echo "  ${ARROW} Engineer View: http://localhost:4768/eng-view"
+echo ""
+
+if [ "$START_MCP" = true ]; then
+    echo -e "${GREEN}Strategy Center (AI):${NC}"
+    echo "  ${ARROW} Strategy Center: http://localhost:4768/strategy-center"
+    echo "  ${ARROW} Voice Strategy: http://localhost:4768/voice-strategy-center"
+    echo ""
+    
+    if [ "$MCP_MODE" = "docker" ]; then
+        echo -e "${GREEN}MCP Server:${NC}"
+        echo "  ${ARROW} MCP API: http://localhost:80/api/chat"
+        echo "  ${ARROW} MCP WebSocket: ws://localhost:80/api/ws"
+        echo "  ${ARROW} MCP SSE (AI Clients): http://localhost:80/mcp/sse"
+        echo "  ${ARROW} Health Check: http://localhost:80/health"
+        if [ "$NGINX_AVAILABLE" = true ]; then
+            echo "  ${ARROW} HTTPS: https://localhost:443"
+        fi
+    else
+        echo -e "${GREEN}MCP Server:${NC}"
+        echo "  ${ARROW} MCP API: http://localhost:8765/api/chat"
+        echo "  ${ARROW} MCP WebSocket: ws://localhost:8765/api/ws"
+        echo "  ${ARROW} Health Check: http://localhost:8765/health"
+    fi
+    echo ""
+fi
+
+echo -e "${YELLOW}Voice Features:${NC}"
+echo "  🎙️  Speech-to-Text: Built-in (browser-based)"
+echo "  🔊 Text-to-Speech: Built-in (browser-based)"
+echo "  ⚙️  Push-to-Talk: Space key or microphone button"
+echo "  ${ARROW} Open Voice Strategy Center to use voice features"
+echo ""
+
+echo -e "${CYAN}Next Steps:${NC}"
+echo "  1. Launch F1 23/24/25 and start a session"
+echo "  2. Configure UDP telemetry to localhost:20777"
+echo "  3. Open http://localhost:4768/voice-strategy-center"
+echo "  4. Talk to your AI race engineer!"
+echo ""
+
+if [ "$START_MCP" = true ]; then
+    echo -e "${CYAN}AI Client Setup:${NC}"
+    echo "  ${ARROW} ChatGPT Desktop: See docs/AI_CLIENT_SETUP.md"
+    echo "  ${ARROW} Claude Desktop: See docs/AI_CLIENT_SETUP.md"
+    echo "  ${ARROW} API Endpoint: http://localhost/mcp/sse"
+    echo ""
+fi
+
+echo -e "${YELLOW}Documentation:${NC}"
+echo "  ${ARROW} Building: docs/BUILDING.md"
+echo "  ${ARROW} Voice Guide: docs/VOICE_INTEGRATION.md"
+echo "  ${ARROW} F1 Agent: docs/F1_RACE_ENGINEER_AGENT.md"
+if [ "$MCP_MODE" = "docker" ]; then
+    echo "  ${ARROW} Docker Quick Start: docs/DOCKER_QUICKSTART.md"
 fi
 echo ""
-echo "📚 Quick Setup:"
-echo "  • ChatGPT Desktop:  Settings → Apps → Create New App → URL: https://localhost:8443/mcp"
-echo "  • Claude Desktop:   See docs/AI_CLIENT_SETUP.md"
-echo "  • Cursor IDE:       Settings → MCP → Add Server → URL: https://localhost:8443/mcp"
+
+echo -e "${RED}To Stop:${NC}"
+if [ "$START_MCP" = true ] && [ "$MCP_MODE" = "docker" ]; then
+    echo "  ./stop.sh && docker-compose -f docker-compose.mcp.yml down"
+else
+    echo "  ./stop.sh"
+fi
 echo ""
-echo "📊 Available MCP Tools (10):"
-echo "  • get_race_info - Current race status"
-echo "  • get_telemetry_data - All drivers data"
-echo "  • get_driver_info - Detailed driver analysis"
-echo "  • analyze_tyre_strategy - Tyre comparison"
-echo "  • get_lap_comparison - Lap time comparison"
-echo "  • analyze_lap_time_consistency - Consistency analysis ⭐"
-echo "  • diagnose_performance_issues - Issue detection ⭐"
-echo "  • compare_to_leader - P1 comparison ⭐"
-echo "  • analyze_sector_performance - Sector breakdown ⭐"
-echo ""
-echo "🎮 Next Steps:"
-echo "  1. Start F1 23/24/25 game"
-echo "  2. Enter a session (practice, qualifying, or race)"
-echo "  3. Open Strategy Center: http://localhost:4768/strategy-center"
-echo "  4. Ask AI: 'Analyze my current performance'"
-echo ""
-echo "📖 Documentation:"
-echo "  • Full Guide:         docs/README.md"
-echo "  • F1 Agent Setup:     docs/F1_RACE_ENGINEER_QUICK_SETUP.md"
-echo "  • AI Client Setup:    docs/AI_CLIENT_SETUP.md"
-echo "  • MCP Integration:    docs/MCP_INTEGRATION.md"
-echo ""
-echo "🛑 To Stop:"
-echo "  ./stop.sh"
-echo ""
-echo "📋 Logs:"
-echo "  tail -f pits-n-giggles.log"
+
+# Save PIDs for cleanup
+echo $BACKEND_PID > .backend.pid
+if [ "$START_MCP" = true ] && [ "$MCP_MODE" = "native" ]; then
+    echo $MCP_PID > .mcp.pid
+fi
+
+echo -e "${GREEN}All systems operational. Happy racing! 🏁${NC}"
 echo ""

@@ -1,0 +1,83 @@
+# F1 Race Engineer MCP Server - Docker Compose Configuration
+version: '3.8'
+
+services:
+  # MCP Server - F1 Race Engineer AI
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: f1-race-engineer-mcp
+    environment:
+      - MCP_PORT=8765
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8765:8765"
+    networks:
+      - f1-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8765/health\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - mcp-data:/app/data
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: f1-nginx-proxy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    networks:
+      - f1-network
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./apps/frontend/html:/usr/share/nginx/html:ro
+      - nginx-logs:/var/log/nginx
+      - ./ssl:/etc/nginx/ssl:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Optional: Pits N Giggles Telemetry Server
+  # Uncomment if you want to run Pits N Giggles in Docker
+  # Otherwise, run it on the host and it will be accessible via host.docker.internal:4768
+  # pits-n-giggles:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: pits-n-giggles
+  #   ports:
+  #     - "4768:4768"
+  #   networks:
+  #     - f1-network
+  #   restart: unless-stopped
+  #   volumes:
+  #     - telemetry-data:/app/data
+  #     - ./integration_test_cfg.json:/app/integration_test_cfg.json:ro
+
+networks:
+  f1-network:
+    driver: bridge
+    name: f1-network
+
+volumes:
+  mcp-data:
+    driver: local
+  nginx-logs:
+    driver: local
+  # telemetry-data:
+  #   driver: local

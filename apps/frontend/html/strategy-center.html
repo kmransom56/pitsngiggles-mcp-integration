@@ -330,10 +330,11 @@
 
     <script>
         // Configuration - Choose AI mode
-        const AI_MODE = localStorage.getItem('ai_mode') || 'openai'; // 'openai' or 'mcp'
+        const AI_MODE = localStorage.getItem('ai_mode') || 'mcp_chat'; // 'mcp_chat', 'openai', or 'mcp'
         const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
         const OPENAI_KEY = localStorage.getItem('openai_api_key') || '';
         const MCP_ENDPOINT = '/mcp/tools';
+        const MCP_CHAT_ENDPOINT = '/api/chat';
         
         // DOM Elements
         const sidebar = document.getElementById('sidebar');
@@ -416,7 +417,81 @@
             }
         }
 
-        // Intelligent query routing based on keywords
+        // Call MCP Chat API with telemetry context
+        async function callMCPChatAPI(question) {
+            try {
+                // Get current telemetry data
+                let telemetryData = null;
+                try {
+                    const telemetryResponse = await fetch('/telemetry-info');
+                    if (telemetryResponse.ok) {
+                        const data = await telemetryResponse.json();
+                        
+                        // Extract relevant telemetry fields
+                        telemetryData = {
+                            lap: data.lap || null,
+                            sector: data.sector || null,
+                            speed: data.speed || null,
+                            throttle: data.throttle || null,
+                            brake: data.brake || null,
+                            steering: data.steering || null,
+                            tyre_temps: data.tyre_temps || null,
+                            tyre_wear: data.tyre_wear || null,
+                            fuel: data.fuel_remaining_laps || null,
+                            position: data.position || null,
+                            session_type: data.session_type || null,
+                            track_name: data.track_name || null,
+                            weather: data.weather || null
+                        };
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch telemetry:', e);
+                }
+
+                // Call MCP chat endpoint
+                const response = await fetch(MCP_CHAT_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: question,
+                        telemetry: telemetryData
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Chat API failed: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                // Format response with analysis if available
+                let formattedResponse = result.response;
+                
+                if (result.analysis && result.analysis.issues && result.analysis.issues.length > 0) {
+                    formattedResponse = `${result.response}\n\n📊 **Analysis:**\n`;
+                    result.analysis.issues.forEach(issue => {
+                        formattedResponse += `- ${issue}\n`;
+                    });
+                }
+                
+                if (result.recommendations && result.recommendations.length > 0) {
+                    formattedResponse += `\n💡 **Recommendations:**\n`;
+                    result.recommendations.forEach(rec => {
+                        formattedResponse += `- ${rec}\n`;
+                    });
+                }
+                
+                return formattedResponse;
+                
+            } catch (error) {
+                console.error('MCP Chat Error:', error);
+                throw error;
+            }
+        }
+
+        // Intelligent query routing based on keywords (for legacy MCP mode)
         async function routeMCPQuery(question) {
             const q = question.toLowerCase();
             
@@ -525,7 +600,10 @@ Be concise, technical, and actionable. Provide 2-3 specific changes maximum with
             try {
                 let response;
 
-                if (AI_MODE === 'mcp') {
+                if (AI_MODE === 'mcp_chat') {
+                    // Use MCP Chat API with intelligent race engineering
+                    response = await callMCPChatAPI(text);
+                } else if (AI_MODE === 'mcp') {
                     // Use MCP endpoints directly
                     response = await routeMCPQuery(text);
                     
@@ -627,11 +705,23 @@ Be concise, technical, and actionable. Provide 2-3 specific changes maximum with
                 const response = await fetch('/race-info');
                 if (response.ok) {
                     statusText.textContent = 'Live';
-                    const mode = AI_MODE === 'mcp' ? 'MCP' : 'OpenAI GPT-4';
-                    addMessage(`F1 Race Engineer online (${mode} mode). I can analyze telemetry, diagnose handling issues, and provide expert setup advice for F1 23/24/25. Ask me about understeer, oversteer, tyre strategy, or car setup.`, 'ai');
+                    const modeText = AI_MODE === 'mcp_chat' ? 'MCP F1 Engineer' : (AI_MODE === 'mcp' ? 'MCP' : 'OpenAI GPT-4');
+                    addMessage(`F1 Race Engineer online (${modeText} mode). I can analyze telemetry, diagnose handling issues, and provide expert setup advice for F1 23/24/25. Ask me about understeer, oversteer, tyre strategy, or car setup.`, 'ai');
                     
                     if (AI_MODE === 'openai' && !OPENAI_KEY) {
                         addMessage('💡 Tip: Set OpenAI API key with: localStorage.setItem("openai_api_key", "sk-...")', 'system');
+                    }
+                    
+                    if (AI_MODE === 'mcp_chat') {
+                        // Check MCP server health
+                        try {
+                            const healthCheck = await fetch('/health');
+                            if (!healthCheck.ok) {
+                                addMessage('⚠️ Warning: MCP server may not be running. Start it with ./start-mcp.sh', 'system');
+                            }
+                        } catch (e) {
+                            addMessage('⚠️ Warning: MCP server may not be running. Start it with ./start-mcp.sh', 'system');
+                        }
                     }
                 } else {
                     statusText.textContent = 'Offline';
@@ -647,15 +737,16 @@ Be concise, technical, and actionable. Provide 2-3 specific changes maximum with
 
         // Allow mode switching via console
         window.switchAIMode = (mode) => {
-            if (mode === 'mcp' || mode === 'openai') {
+            if (mode === 'mcp_chat' || mode === 'mcp' || mode === 'openai') {
                 localStorage.setItem('ai_mode', mode);
                 location.reload();
             } else {
-                console.log('Usage: switchAIMode("mcp") or switchAIMode("openai")');
+                console.log('Usage: switchAIMode("mcp_chat") or switchAIMode("mcp") or switchAIMode("openai")');
             }
         };
         console.log('💡 Current AI mode:', AI_MODE);
-        console.log('💡 Switch mode: switchAIMode("mcp") or switchAIMode("openai")');
+        console.log('💡 Switch mode: switchAIMode("mcp_chat"), switchAIMode("mcp"), or switchAIMode("openai")');
+        console.log('💡 mcp_chat = Full AI race engineer with LLM | mcp = Telemetry only | openai = Direct OpenAI');
     </script>
 </body>
 </html>

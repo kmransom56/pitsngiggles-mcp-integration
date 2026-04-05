@@ -1,399 +1,265 @@
-# Model Context Protocol (MCP) Integration
-
-Pits n' Giggles now supports the Model Context Protocol (MCP), allowing AI tools like ChatGPT, Claude, and Cursor to directly access live F1 telemetry data.
+# MCP Integration Guide for Pits N' Giggles
 
 ## Overview
 
-The MCP server exposes telemetry data through a standardized protocol that AI assistants can use to:
-- Monitor live race conditions
-- Analyze driver performance
-- Compare lap times and strategies
-- Provide real-time race engineering insights
+Pits N' Giggles includes a Model Context Protocol (MCP) server that exposes F1 telemetry data to AI assistants like ChatGPT, Claude, Cursor, and other AI tools. This enables real-time race engineering analysis powered by AI.
+
+## Architecture
+
+```
+┌─────────────────────┐
+│   F1 23 Game        │
+│   Telemetry Data    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Pits N' Giggles    │
+│  Backend Server     │
+│  (Port 4768)        │
+└──────────┬──────────┘
+           │
+           ├─── WebSocket ──┐
+           │                 │
+           ├─── HTTP API     │
+           │                 │
+           └─── MCP /mcp ────┤
+                             │
+                             ▼
+┌─────────────────────────────────────────┐
+│            Nginx Reverse Proxy          │
+│         (Port 80/443 + 8443)            │
+│                                         │
+│  ┌───────────────────────────────────┐  │
+│  │  /                → Driver View   │  │
+│  │  /eng-view        → Eng View      │  │
+│  │  /strategy-center → AI Chat UI    │  │
+│  │  /mcp             → MCP Endpoint  │  │
+│  │  /telemetry/*     → WebSocket     │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+           │
+           ├──────┬──────┬──────┐
+           ▼      ▼      ▼      ▼
+        Claude  ChatGPT Cursor  Web UI
+         MCP     MCP     MCP    Chat
+```
+
+## Features
+
+### F1 Race Engineer AI Agent
+
+The AI agent provides professional race engineering analysis with the following capabilities:
+
+#### Core Tools
+
+1. **get_race_info** - Session status, weather, track conditions
+2. **get_telemetry_data** - Live data for all drivers
+3. **get_driver_info** - Detailed driver-specific telemetry
+4. **analyze_tyre_strategy** - Tyre wear and strategy analysis
+5. **get_lap_comparison** - Performance comparison between drivers
+6. **analyze_lap_time_consistency** - Consistency and trends
+7. **diagnose_performance_issues** - Automated issue detection
+8. **compare_to_leader** - Gap analysis to P1
+9. **analyze_sector_performance** - Sector-by-sector breakdown
+
+#### Setup Tuning Expertise
+
+The agent can analyze F1 23 telemetry and provide setup recommendations:
+
+- **Aero Balance**: Front wing vs rear wing adjustments for handling
+- **Differential**: On/off-throttle settings for rotation
+- **Suspension**: Anti-roll bar settings for understeer/oversteer
+- **Brake Bias**: Forward/rear balance optimization
+- **Tyre Strategy**: Compound selection and pit window optimization
 
 ## Quick Start
 
-### 1. Start Pits n' Giggles
-
-Run the application normally. The MCP server is automatically available at:
-- **Local**: `http://localhost:4768/mcp`
-- **With HTTPS**: `https://localhost:4768/mcp`
-- **With Nginx Proxy**: `https://localhost:8443/mcp` (see [Nginx Setup](#nginx-reverse-proxy))
-
-### 2. Access the Strategy Center (Optional)
-
-For a built-in AI chat interface, visit:
-- `http://localhost:4768/strategy-center`
-
-This provides a split-screen view with telemetry on the left and AI chat on the right. **Note:** You'll need to set your OpenAI API key in browser localStorage:
-```javascript
-localStorage.setItem('openai_api_key', 'sk-your-key-here')
-```
-
-### 3. Connect Your AI Tool
-
-See the [AI Tool Configuration](#ai-tool-configuration) section below for specific setup instructions.
-
-## Nginx Reverse Proxy (Recommended)
-
-For production use with ChatGPT and other external AI tools, use the Nginx reverse proxy to expose the MCP server over HTTPS.
-
-### Setup
+### 1. Start Pits N' Giggles
 
 ```bash
-cd deployment/scripts
-sudo ./setup-nginx.sh
+./start.sh
+# or on Windows:
+start.bat
 ```
 
-This will:
-1. Generate a self-signed SSL certificate
-2. Configure Nginx to proxy MCP traffic
-3. Enable HTTPS on port 8443
+The server runs on `http://localhost:4768` by default.
 
-Your MCP endpoint will be available at: `https://localhost:8443/mcp`
+### 2. Access the Strategy Center
 
-For remote access, replace `localhost` with your server's IP or domain name.
+Navigate to `http://localhost:4768/strategy-center` to access the AI-powered race engineer interface.
 
-See `deployment/README.md` for detailed Nginx configuration options.
+### 3. Using the AI Chat
 
-## Available MCP Tools
+The Strategy Center provides:
 
-The MCP server provides the following tools that AI assistants can invoke:
+- Real-time telemetry visualization
+- AI chat interface for race engineering questions
+- Quick action buttons for common queries
+- Voice input/output (optional)
 
-### 1. `get_race_info`
-Get current race status and overall statistics.
+Example queries:
+- "Analyze my last lap performance"
+- "What setup changes would reduce understeer?"
+- "Predict optimal pit window"
+- "Compare my tyre strategy to P1"
 
-**Returns:**
-- Session time and type
-- Current lap and total laps
-- Safety car/VSC status
-- Track and air temperatures
-- Weather forecast
+## Nginx Reverse Proxy Setup
 
-**Example use:**
-> "What are the current race conditions?"
+For production deployments with HTTPS and external access, see `deployment/nginx/README.md`.
 
----
-
-### 2. `get_telemetry_data`
-Get live telemetry for all drivers.
-
-**Returns:**
-- Driver positions and names
-- Current lap times
-- Tyre compounds and wear
-- Fuel levels
-- Penalties and pit status
-
-**Example use:**
-> "Show me the current race standings"
-
----
-
-### 3. `get_driver_info`
-Get detailed information about a specific driver.
-
-**Parameters:**
-- `driver_index` (integer, 0-21): The driver's index in the race
-
-**Returns:**
-- Complete lap history
-- Tyre wear progression
-- Damage status
-- ERS deployment
-- Stint information
-- Sector times
-
-**Example use:**
-> "Analyze driver 5's last 3 laps"
-
----
-
-### 4. `get_stream_overlay_data`
-Get broadcasting-optimized data for stream overlays.
-
-**Returns:**
-- Player position and status
-- Delta to leader/ahead/behind
-- Key race information formatted for streaming
-
-**Example use:**
-> "What should I show on my stream overlay?"
-
----
-
-### 5. `analyze_tyre_strategy`
-Compare tyre strategies across multiple drivers.
-
-**Parameters:**
-- `driver_indices` (array of integers, optional): List of drivers to analyze
-
-**Returns:**
-- Current tyre compound and age
-- Tyre wear percentages
-- Complete stint history
-- Compound choices
-
-**Example use:**
-> "Compare tyre strategies between drivers 0, 3, and 7"
-
----
-
-### 6. `get_lap_comparison`
-Compare lap times between drivers.
-
-**Parameters:**
-- `driver_indices` (array of integers, optional): Drivers to compare
-- `lap_number` (integer, optional): Specific lap to analyze
-
-**Returns:**
-- Best and last lap times
-- Lap-by-lap comparison
-- Sector time breakdowns (if lap specified)
-
-**Example use:**
-> "Compare lap 15 between all drivers on softs"
-
-## AI Tool Configuration
-
-**🔗 For complete setup instructions for all AI clients, see: [AI Client Setup Guide](AI_CLIENT_SETUP.md)**
-
-This section provides quick setup for the most common tools. For advanced configurations, self-hosted options, and additional clients (Continue.dev, Windsurf, Zed, Open WebUI, LibreChat, etc.), refer to the comprehensive guide above.
-
-### ChatGPT Desktop (Quick Setup)
-
-1. **Enable Developer Mode**
-   - Settings → Personalization → Developer Mode (Toggle ON)
-
-2. **Create New App**
-   - Apps → Create New App
-   - **Name**: `Pits n' Giggles`
-   - **App URL**: `https://localhost:8443/mcp` (or your server URL)
-   - **Transport Type**: `SSE`
-
-3. **Connect**
-   - Click **Connect**
-   - Tools should automatically populate
-
-4. **Start Using**
-   - Ask: *"What are the current race conditions?"*
-   - Ask: *"Analyze driver 0's tyre strategy"*
-
----
-
-### Cursor IDE
-
-1. **Open Settings**
-   - Click the Gear icon → **Features** → **MCP**
-
-2. **Add Server**
-   - **Name**: `Pits n Giggles Telemetry`
-   - **Type**: `SSE`
-   - **URL**: `https://localhost:8443/mcp`
-
-3. **Use in Chat**
-   - The AI agent will automatically have access to telemetry data
-   - Ask racing-specific questions during development
-
----
+## AI Client Integration
 
 ### Claude Desktop
 
-Edit the configuration file:
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
-
-Add this configuration:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "pitsngiggles": {
-      "command": "npx",
+      "command": "curl",
       "args": [
-        "-y",
-        "mcp-remote",
-        "https://localhost:8443/mcp"
+        "-N",
+        "-H", "Accept: text/event-stream",
+        "http://localhost:4768/mcp"
       ]
     }
   }
 }
 ```
 
-Restart Claude Desktop.
-
----
-
-### Cline (VS Code Extension)
-
-Edit the MCP settings file:
-- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
-- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
-
-Add this configuration:
+For remote servers with HTTPS:
 
 ```json
 {
   "mcpServers": {
-    "Pits_N_Giggles": {
-      "type": "sse",
-      "url": "https://localhost:8443/mcp"
+    "pitsngiggles": {
+      "command": "curl",
+      "args": [
+        "-N",
+        "-H", "Accept: text/event-stream",
+        "https://your-domain.com:8443/mcp"
+      ]
     }
   }
 }
 ```
 
-Reload VS Code.
+### ChatGPT (via Custom GPT)
 
----
+See `docs/AI_CLIENT_SETUP.md` for detailed ChatGPT configuration.
 
-## Self-Signed Certificate Trust
+### Cursor IDE
 
-If using the Nginx reverse proxy with a self-signed certificate, you'll need to trust it:
+Add to your Cursor settings (`.cursor/mcp_config.json`):
 
-### Windows
-1. Open `certmgr.msc`
-2. Import `/etc/nginx/ssl/pitsngiggles/fullchain.pem` to "Trusted Root Certification Authorities"
-
-### macOS
-```bash
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /etc/nginx/ssl/pitsngiggles/fullchain.pem
+```json
+{
+  "mcpServers": [
+    {
+      "name": "pitsngiggles",
+      "type": "sse",
+      "url": "http://localhost:4768/mcp"
+    }
+  ]
+}
 ```
 
-### Linux
+### Docker MCP Toolkit Integration
+
+See `deployment/docker/MCP_TOOLKIT.md` for Docker integration guide.
+
+## Voice Functionality
+
+The Strategy Center supports voice interaction using the Web Speech API.
+
+### Enabling Voice
+
+In the Strategy Center UI:
+1. Click the microphone icon to start voice input
+2. Speak your question clearly
+3. AI responses can be played back automatically
+4. Toggle voice output in settings
+
+## API Reference
+
+### MCP Endpoints
+
+#### GET /mcp
+Server-Sent Events stream for real-time tool discovery
+
 ```bash
-sudo cp /etc/nginx/ssl/pitsngiggles/fullchain.pem /usr/local/share/ca-certificates/pitsngiggles.crt
-sudo update-ca-certificates
+curl -N -H "Accept: text/event-stream" http://localhost:4768/mcp
 ```
 
-### Browser (for testing)
-- **Chrome/Edge**: Visit `https://localhost:8443/mcp` and click "Advanced" → "Proceed to localhost"
-- **Firefox**: Visit URL → Click "Advanced" → "Accept the Risk and Continue"
+#### POST /mcp/tools
+Execute specific MCP tools
 
----
+```bash
+curl -X POST http://localhost:4768/mcp/tools \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "tools/call",
+    "params": {
+      "name": "get_race_info",
+      "arguments": {}
+    }
+  }'
+```
 
-## Example AI Conversations
+See `docs/API_REFERENCE.md` for complete API documentation.
 
-Here are some example prompts you can use with your AI assistant:
+## F1 Race Engineer Agent Configuration
 
-### Race Strategy
-> "Compare the tyre strategies of the top 3 drivers"
-
-> "Who has the oldest tyres in the race right now?"
-
-> "Should I pit on this lap based on my current tyre wear?"
-
-### Performance Analysis
-> "Analyze my last 5 laps and tell me where I'm losing time"
-
-> "Compare my sector times to the race leader"
-
-> "Which drivers are faster than me on the same tyre compound?"
-
-### Race Monitoring
-> "Alert me when anyone pits or when the safety car is deployed"
-
-> "What's the gap to the car behind me?"
-
-> "Give me a summary of the current race situation"
-
-### Engineering Support
-> "Based on current fuel consumption, how many more laps can I complete?"
-
-> "What's causing my lap times to drop off?"
-
-> "Compare my ERS deployment to other drivers"
-
----
+See `docs/F1_AGENT_CONFIG.md` for detailed agent configuration and tuning logic.
 
 ## Troubleshooting
 
-### Connection Issues
+### MCP Connection Issues
 
-**"Unable to connect to MCP server"**
-- Verify Pits n' Giggles is running
-- Check the MCP URL is correct
-- Ensure Nginx is running: `sudo systemctl status nginx`
-- Check logs: `sudo tail -f /var/log/nginx/pitsngiggles-mcp.error.log`
+**Problem**: AI client cannot connect to MCP endpoint
 
-**"Certificate verification failed"**
-- Trust the self-signed certificate (see above)
-- Or use HTTP instead: `http://localhost:4768/mcp`
+**Solution**:
+1. Verify Pits N' Giggles is running: `curl http://localhost:4768/mcp`
+2. Check firewall settings
+3. For remote access, ensure nginx is properly configured
+4. Check SSL certificate validity
 
-**"No tools available"**
-- Refresh the connection in your AI tool
-- Check browser console for errors
-- Verify `/mcp` endpoint returns data: `curl http://localhost:4768/mcp`
+### No Telemetry Data
 
-### Data Issues
+**Problem**: MCP tools return empty data
 
-**"No race data available"**
-- Ensure F1 game is running and sending telemetry
-- Check Pits n' Giggles is receiving packets
-- Verify you're in an active session (not main menu)
+**Solution**:
+1. Ensure F1 23 is running and telemetry is enabled
+2. Check UDP telemetry settings in F1 23
+3. Verify Pits N' Giggles is receiving data
+4. Check the driver view at `http://localhost:4768/`
 
-**"Driver index out of range"**
-- Use valid driver indices (0-21)
-- Check current session has active drivers
+### Voice Not Working
 
-**"Stale data"**
-- MCP updates in real-time as telemetry arrives
-- If data seems old, check game telemetry settings
+**Problem**: Speech recognition/synthesis not functional
 
----
-
-## Development
-
-### Testing the MCP Endpoint
-
-Test the SSE connection:
-```bash
-curl -N http://localhost:4768/mcp
-```
-
-Test tool invocation:
-```bash
-curl -X POST http://localhost:4768/mcp/tools \
-  -H "Content-Type: application/json" \
-  -d '{"method": "tools/list"}'
-```
-
-Get race info:
-```bash
-curl -X POST http://localhost:4768/mcp/tools \
-  -H "Content-Type: application/json" \
-  -d '{"method": "tools/call", "params": {"name": "get_race_info", "arguments": {}}}'
-```
-
-### Custom AI Agents
-
-You can build custom AI agents using the MCP protocol. The server follows the standard MCP specification for tool discovery and invocation.
-
-See `lib/mcp_server/server.py` for the implementation details.
-
----
+**Solution**:
+1. Use Chrome, Edge, or Safari (Firefox has limited support)
+2. Grant microphone permissions
+3. Check browser console for errors
+4. Ensure HTTPS for production (required for some browsers)
 
 ## Security Considerations
 
-### Local Development
-- Self-signed certificates are fine for local use
-- Default configuration allows all origins (`Access-Control-Allow-Origin: *`)
+See `docs/SECURITY.md` for security best practices.
 
-### Production Deployment
-- Use proper SSL certificates (Let's Encrypt recommended)
-- Restrict CORS to known domains
-- Consider authentication for public-facing deployments
-- Use firewall rules to limit access
+## Contributing
 
-### Network Exposure
-- The Nginx reverse proxy configuration is designed for local network use
-- For internet exposure, add authentication and proper SSL
-- Consider VPN or tunneling solutions for remote access (see main docs)
+To extend the MCP server with new tools, see `docs/CONTRIBUTING.md`.
 
----
+## Resources
 
-## See Also
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/)
+- [Pits N' Giggles Documentation](https://github.com/ashwin-nat/pits-n-giggles)
+- [F1 23 UDP Telemetry Specification](https://answers.ea.com/t5/General-Discussion/F1-23-UDP-Specification/td-p/12633159)
 
-- [Nginx Deployment Guide](../deployment/README.md)
-- [Main Documentation](https://www.pitsngiggles.com/blog)
-- [MCP Protocol Specification](https://spec.modelcontextprotocol.io/)
+## License
+
+MIT License - See LICENSE file for details
