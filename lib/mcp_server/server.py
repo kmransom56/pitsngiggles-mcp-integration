@@ -776,3 +776,256 @@ class MCPServer:
         while True:
             await asyncio.sleep(30)
             yield f"event: ping\ndata: {json.dumps({'timestamp': datetime.now().isoformat()})}\n\n"
+    
+    async def handle_chat(self, message: str, telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Handle chat requests from the F1 Race Engineer interface.
+        
+        Args:
+            message: User question/request
+            telemetry: Optional telemetry data context
+            
+        Returns:
+            Dict containing response, analysis, and recommendations
+        """
+        try:
+            # Analyze telemetry if provided
+            analysis = None
+            if telemetry:
+                analysis = self._analyze_telemetry(telemetry)
+            
+            # Generate intelligent response based on question
+            response_text = await self._generate_race_engineer_response(message, telemetry, analysis)
+            
+            # Extract recommendations from analysis
+            recommendations = []
+            if analysis and "recommendations" in analysis:
+                recommendations = analysis["recommendations"]
+            
+            return {
+                "response": response_text,
+                "analysis": analysis,
+                "recommendations": recommendations
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Chat error: {e}")
+            return {
+                "response": f"I apologize, I encountered an error analyzing your request. Error: {str(e)}",
+                "analysis": None,
+                "recommendations": []
+            }
+    
+    def _analyze_telemetry(self, telemetry: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze telemetry data and identify issues."""
+        analysis = {
+            "timestamp": datetime.now().isoformat(),
+            "issues": [],
+            "recommendations": []
+        }
+        
+        # Analyze tyre temperatures
+        if telemetry.get("tyre_temps"):
+            temps = telemetry["tyre_temps"]
+            if isinstance(temps, dict):
+                temp_values = list(temps.values())
+                avg_temp = sum(temp_values) / len(temp_values)
+                temp_diff = max(temp_values) - min(temp_values)
+                
+                if temp_diff > 15:
+                    analysis["issues"].append(f"Tyre temperature imbalance: {temp_diff:.1f}°C difference")
+                    if temps.get("FL", 0) > avg_temp + 10:
+                        analysis["recommendations"].append("Front wing angle: Reduce by 1-2 clicks for better front-end balance")
+                    elif temps.get("RL", 0) > avg_temp + 10:
+                        analysis["recommendations"].append("Rear anti-roll bar: Increase stiffness by 1 click")
+        
+        # Analyze tyre wear
+        if telemetry.get("tyre_wear"):
+            wear = telemetry["tyre_wear"]
+            if isinstance(wear, dict):
+                wear_values = list(wear.values())
+                max_wear = max(wear_values)
+                if max_wear > 50:
+                    analysis["issues"].append(f"High tyre wear detected: {max_wear:.0f}%")
+                    analysis["recommendations"].append("Consider pit stop within next 3-5 laps")
+        
+        # Analyze fuel
+        if telemetry.get("fuel"):
+            fuel = telemetry["fuel"]
+            if isinstance(fuel, (int, float)) and fuel < 2.0:
+                analysis["issues"].append(f"Low fuel: {fuel:.1f} laps remaining")
+                analysis["recommendations"].append("Enable fuel-saving mode in Sector 3")
+        
+        return analysis
+    
+    async def _generate_race_engineer_response(
+        self,
+        message: str,
+        telemetry: Optional[Dict[str, Any]],
+        analysis: Optional[Dict[str, Any]]
+    ) -> str:
+        """Generate intelligent race engineer response."""
+        message_lower = message.lower()
+        
+        # Context-aware responses
+        if "understeer" in message_lower:
+            return self._handle_understeer_query(telemetry, analysis)
+        elif "oversteer" in message_lower:
+            return self._handle_oversteer_query(telemetry, analysis)
+        elif "tyre" in message_lower or "tire" in message_lower:
+            return self._handle_tyre_query(telemetry, analysis)
+        elif "fuel" in message_lower:
+            return self._handle_fuel_query(telemetry, analysis)
+        elif "setup" in message_lower or "balance" in message_lower:
+            return self._handle_setup_query(telemetry, analysis)
+        elif "lap" in message_lower or "sector" in message_lower or "time" in message_lower:
+            return self._handle_laptime_query(telemetry, analysis)
+        elif "pit" in message_lower or "strategy" in message_lower:
+            return self._handle_strategy_query(telemetry, analysis)
+        else:
+            return self._handle_general_query(message, telemetry, analysis)
+    
+    def _handle_understeer_query(self, telemetry, analysis) -> str:
+        return """🔧 UNDERSTEER DIAGNOSIS
+
+**Recommended Changes:**
+1. **Front Wing:** Increase angle by +1 click for more front-end grip
+2. **Front ARB:** Reduce stiffness by -2 clicks for mechanical compliance
+3. **Brake Bias:** Move forward to 56-57% for better front loading
+4. **Off-Throttle Diff:** Reduce to 55% for improved turn-in rotation
+
+**Expected Impact:**
+Sharper turn-in response with reduced push in slow-medium corners. May slightly increase front tyre degradation.
+
+**Validation:** Focus on corner entry feel and mid-corner stability on your next run."""
+    
+    def _handle_oversteer_query(self, telemetry, analysis) -> str:
+        return """🔧 OVERSTEER DIAGNOSIS
+
+**Recommended Changes:**
+1. **Rear Wing:** Increase angle by +1-2 clicks for rear stability
+2. **On-Throttle Diff:** Increase to 70-75% for better traction
+3. **Rear ARB:** Reduce stiffness by -2 clicks
+4. **Rear Suspension:** Increase stiffness by +1 for better mechanical grip
+
+**Expected Impact:**
+More planted rear end on corner exit, better traction out of slow corners. May cost 1-2 kph top speed.
+
+**Validation:** Monitor rear tyre temperatures and corner exit confidence."""
+    
+    def _handle_tyre_query(self, telemetry, analysis) -> str:
+        if analysis and analysis.get("issues"):
+            response = "📊 **Tyre Analysis:**\n\n"
+            for issue in analysis["issues"]:
+                if "tyre" in issue.lower() or "tire" in issue.lower():
+                    response += f"- {issue}\n"
+            if analysis.get("recommendations"):
+                response += "\n💡 **Actions:**\n"
+                for rec in analysis["recommendations"]:
+                    if "tyre" in rec.lower() or "tire" in rec.lower() or "pit" in rec.lower():
+                        response += f"- {rec}\n"
+            return response
+        return """🏁 **Tyre Management Strategy:**
+
+Monitor tyre temps (optimal: 85-95°C) and wear rate. Typical pit windows:
+- **Soft:** 8-12 laps
+- **Medium:** 15-20 laps
+- **Hard:** 25+ laps
+
+Adjust pressures in 0.1-0.2 PSI increments if temps are outside optimal range."""
+    
+    def _handle_fuel_query(self, telemetry, analysis) -> str:
+        if telemetry and telemetry.get("fuel"):
+            fuel_laps = telemetry["fuel"]
+            return f"""⛽ **Fuel Status:**
+
+Current fuel load: **{fuel_laps:.1f} laps** remaining
+
+**Strategy:**
+- {"✅ Fuel is adequate" if fuel_laps > 3.0 else "⚠️ Consider fuel-saving mode"}
+- Optimal consumption: 1.6-1.8 kg/lap
+- Enable lean mix in Sector 3 if needed
+
+**Tip:** Lift and coast approaching heavy braking zones to save ~0.1 kg/lap."""
+        return "Check your fuel readout in the HUD. Target 0.3-0.5 lap buffer at race end."
+    
+    def _handle_setup_query(self, telemetry, analysis) -> str:
+        track_name = telemetry.get("track_name", "this circuit") if telemetry else "this circuit"
+        return f"""🔧 **Balanced Setup for {track_name}:**
+
+**Baseline Settings:**
+- **Aero:** Front 30-35, Rear 28-33 (adjust for track characteristics)
+- **Differential:** On-throttle 65%, Off-throttle 60%
+- **ARBs:** Front 6-8, Rear 5-7 (stiffer for high-speed, softer for mechanical)
+- **Brake Bias:** 54-56% (tune based on entry behavior)
+
+**Tuning Process:**
+1. Validate baseline over 3-5 laps
+2. Make ONE change at a time (1-2 clicks maximum)
+3. Test for 2 laps minimum
+4. Keep notes on changes and lap time impact
+
+**Focus Areas:** Corner entry balance, mid-corner stability, exit traction"""
+    
+    def _handle_laptime_query(self, telemetry, analysis) -> str:
+        return """⏱️ **Lap Time Improvement Focus:**
+
+**Key Areas:**
+1. **Sector Analysis:** Identify biggest time loss (use lap comparison tools)
+2. **Braking Zones:** Late and progressive braking gains 0.1-0.3s per heavy zone
+3. **Corner Exit:** Smooth throttle application, focus on maximizing exit speed
+4. **Racing Line:** Experiment with late apex vs geometric line
+
+**Data to Monitor:**
+- Sector consistency (±0.3s variance = good)
+- Speed trap deltas vs competitors
+- Tyre temp evolution through stint
+
+Use the lap comparison tool to pinpoint specific corners."""
+    
+    def _handle_strategy_query(self, telemetry, analysis) -> str:
+        lap_num = telemetry.get("lap", 0) if telemetry else 0
+        return f"""🎯 **Race Strategy Advice:**
+
+{"**Current Lap:** " + str(lap_num) if lap_num > 0 else ""}
+
+**Key Strategy Elements:**
+1. **Pit Window:** Typically opens lap 12-18 (25% race distance)
+2. **Tyre Delta:** Soft to Medium ~0.5-0.8s/lap, Medium to Hard ~0.3-0.5s/lap
+3. **Undercut Threat:** Pit 1-2 laps before competitor to gain track position
+4. **Track Position:** Worth ~0.3-0.5s/lap in dirty air
+
+**Decision Factors:**
+- Tyre wear rate (pit when >60% wear)
+- Gap to cars ahead/behind
+- Safety car probability
+- Weather forecast
+
+Monitor gaps and be ready to react to competitor pit stops."""
+    
+    def _handle_general_query(self, message, telemetry, analysis) -> str:
+        if analysis and (analysis.get("issues") or analysis.get("recommendations")):
+            response = "📊 **Current Status:**\n\n"
+            if analysis.get("issues"):
+                response += "**Issues Detected:**\n"
+                for issue in analysis["issues"]:
+                    response += f"- {issue}\n"
+            if analysis.get("recommendations"):
+                response += "\n💡 **Recommendations:**\n"
+                for rec in analysis["recommendations"]:
+                    response += f"- {rec}\n"
+            return response
+        
+        return """👋 **F1 Race Engineer Ready**
+
+I can help you with:
+- 🏎️ **Car Setup:** Handling balance, aero, suspension, diff
+- 🛞 **Tyre Strategy:** Wear analysis, pit windows, compound selection  
+- ⛽ **Fuel Management:** Consumption rates, saving techniques
+- ⏱️ **Performance:** Lap time analysis, sector breakdowns
+- 🎯 **Race Strategy:** Pit timing, position management
+
+**Quick Tips:**
+Ask specific questions like "I have understeer in Turn 3" or "When should I pit?" for best results.
+
+What would you like to work on?"""

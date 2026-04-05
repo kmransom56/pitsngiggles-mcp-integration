@@ -155,6 +155,16 @@ class TelemetryWebServer(BaseWebServer):
             """
             return await self.render_template('strategy-center.html')
 
+        @self.http_route('/voice-strategy-center')
+        async def voiceStrategyCenter() -> str:
+            """
+            Render the voice-enabled AI race engineer page.
+
+            Returns:
+                str: Rendered HTML content for the voice strategy center.
+            """
+            return await self.render_template('voice-strategy-center.html')
+
     def _defineDataRoutes(self) -> None:
         """
         Define HTTP routes for retrieving telemetry and race-related data.
@@ -275,6 +285,22 @@ class TelemetryWebServer(BaseWebServer):
             
             result = await self.m_mcp_server.handle_request(method, params)
             return self.jsonify(result), HTTPStatus.OK
+
+        @self.http_route('/api/chat', methods=['POST'])
+        async def mcpChatEndpoint():
+            """
+            Chat API endpoint for F1 Race Engineer.
+            
+            Provides intelligent race engineering responses with telemetry context.
+            """
+            import json
+            data = await self.request.get_json()
+            message = data.get('message', '')
+            telemetry = data.get('telemetry', None)
+            
+            # Forward to MCP server's chat handler
+            response = await self.m_mcp_server.handle_chat(message, telemetry)
+            return self.jsonify(response), HTTPStatus.OK
 
     async def _post_start(self) -> None:
         """Function to be called after the server starts serving."""

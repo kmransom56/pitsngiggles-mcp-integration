@@ -93,14 +93,19 @@ fi
 source .venv/bin/activate
 
 # Install dependencies
-echo "Installing dependencies..."
+echo "Installing dependencies with uv (fast)..."
 if [ "$USE_UV" = true ]; then
     # Fix uv cache permissions if needed
     mkdir -p ~/.cache/uv 2>/dev/null || true
-    chmod -R 755 ~/.cache/uv 2>/dev/null || true
+    chmod 755 ~/.cache/uv 2>/dev/null || true
     
-    # Install dependencies directly (no editable mode needed for this app)
-    cd mcp_server && UV_NO_CACHE=1 uv pip install -r requirements.txt && cd .. || { echo "Failed to install MCP dependencies"; }
+    # Install main dependencies
+    uv pip install --system -r requirements.txt 2>/dev/null || echo "Main dependencies already installed"
+    
+    # Install MCP server dependencies
+    if [ -f "mcp_server/requirements.txt" ]; then
+        uv pip install --system -r mcp_server/requirements.txt 2>/dev/null || echo "MCP dependencies already installed"
+    fi
 else
     echo "Warning: uv not found, some features may not work"
 fi
