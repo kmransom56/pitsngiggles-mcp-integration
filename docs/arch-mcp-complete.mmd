@@ -1,0 +1,269 @@
+%%{ init : { "theme" : "base", "themeVariables": {
+  "background": "#0b1020",
+  "primaryColor": "#1f6feb",
+  "primaryTextColor": "#e6edf3",
+  "secondaryColor": "#8250df",
+  "tertiaryColor": "#3fb950",
+  "lineColor": "#8b949e",
+  "edgeLabelBackground": "#0b1020",
+  "fontFamily": "Inter, JetBrains Mono, sans-serif",
+  "fontSize": "14px",
+  "clusterBkg": "#0d1117",
+  "clusterBorder": "#30363d"
+}} }%%
+
+%% ---------------------------------------------------------------------------
+%% Pits N Giggles + F1 Race Engineer MCP — Complete Integration Architecture
+%% ---------------------------------------------------------------------------
+flowchart LR
+
+%% ===========================================================================
+%% External Systems
+%% ===========================================================================
+subgraph EXTERNAL[" External Systems"]
+  direction TB
+  F1_SIM[" F1 23/24/25 Game"]
+  EXT_TGT[" External Targets"]
+end
+
+%% ===========================================================================
+%% Core Telemetry Stack
+%% ===========================================================================
+subgraph CORE[" Pits N Giggles Core"]
+  direction TB
+
+  subgraph TELEMETRY[" Telemetry Ingest"]
+    direction TB
+    UDP_RECV["UDP Receiver :20777"]
+    PARSERS["Packet Parsers"]
+    PACKET_FWD["Packet Forwarder"]
+  end
+
+  subgraph STATE[" State & Computation"]
+    direction TB
+    COMP_ENGINE["Computation Engine"]
+    SHARED_STATE["Shared State"]
+    API_INTF["State Interface"]
+  end
+
+  subgraph INTF[" Core Interfaces"]
+    direction TB
+    HTTP["HTTP Server :4768"]
+    SOCKETIO["Socket.IO"]
+    ZMQ_PUB["ZMQ Publisher"]
+    IPC["IPC Server"]
+  end
+end
+
+%% ===========================================================================
+%% MCP AI Layer
+%% ===========================================================================
+subgraph MCP_LAYER[" F1 Race Engineer (MCP)"]
+  direction TB
+  
+  subgraph MCP_SERVER[" MCP Server :8765"]
+    direction TB
+    MCP_API["REST API /mcp/chat"]
+    MCP_WS["WebSocket /mcp/ws"]
+    MCP_SSE["SSE /mcp/sse"]
+  end
+  
+  subgraph AI_ENGINE[" AI Engine"]
+    direction TB
+    TELEMETRY_ANALYZER["Telemetry Analyzer"]
+    SETUP_ADVISOR["Setup Advisor"]
+    STRATEGY_AI["Strategy AI"]
+    LLM_CONNECTOR["LLM Connector"]
+  end
+  
+  subgraph KNOWLEDGE[" F1 Knowledge Base"]
+    direction TB
+    TUNING_LOGIC["Tuning Logic<br/>(Aero, Diff, ARB, Brakes)"]
+    TRACK_DATA["Track Database"]
+    SETUP_LIBRARY["Setup Library"]
+  end
+end
+
+%% ===========================================================================
+%% Reverse Proxy & Load Balancer
+%% ===========================================================================
+subgraph PROXY[" nginx Reverse Proxy"]
+  direction TB
+  NGINX_HTTP["HTTP :80"]
+  NGINX_HTTPS["HTTPS :443"]
+  STATIC_SERVER["Static File Server"]
+  API_PROXY["API Proxy"]
+end
+
+%% ===========================================================================
+%% Web Clients
+%% ===========================================================================
+subgraph UI[" Web Clients (Browser)"]
+  direction TB
+  STREAM_OVERLAY[" Stream Overlay"]
+  DRV_VIEW[" Driver Dashboard"]
+  ENG_VIEW[" Engineer Dashboard"]
+  STRATEGY_CENTER[" Strategy Center (AI)"]
+  VOICE_STRATEGY[" Voice Strategy Center"]
+end
+
+%% ===========================================================================
+%% Voice Layer
+%% ===========================================================================
+subgraph VOICE[" Voice Layer"]
+  direction TB
+  STT["Speech-to-Text<br/>(Web Speech API)"]
+  TTS["Text-to-Speech<br/>(Speech Synthesis API)"]
+  PTT["Push-to-Talk<br/>(Space Key)"]
+end
+
+%% ===========================================================================
+%% AI Clients (MCP Protocol)
+%% ===========================================================================
+subgraph AI_CLIENTS[" AI Desktop Clients"]
+  direction TB
+  CHATGPT[" ChatGPT Desktop<br/>(SSE Transport)"]
+  CLAUDE[" Claude Desktop<br/>(SSE Transport)"]
+  CURSOR[" Cursor IDE<br/>(MCP Protocol)"]
+  CUSTOM_AI[" Custom AI Clients<br/>(REST/WebSocket)"]
+end
+
+%% ===========================================================================
+%% External AI Services
+%% ===========================================================================
+subgraph LLM[" LLM Services"]
+  direction TB
+  OPENROUTER[" OpenRouter<br/>(GPT-4, Claude, etc.)"]
+  OPENAI[" OpenAI<br/>(GPT-4o)"]
+  ANTHROPIC[" Anthropic<br/>(Claude 3.5)"]
+end
+
+%% ===========================================================================
+%% Message Distribution
+%% ===========================================================================
+subgraph PITWALL[" PitWall Broker"]
+  direction TB
+  ZMQ_PROXY["ZMQ Proxy"]
+end
+
+%% ===========================================================================
+%% HUD Subsystem
+%% ===========================================================================
+subgraph HUD[" HUD Subsystem"]
+  direction TB
+  HUD_SUB["ZMQ Subscriber"]
+  HUD_SOCKETIO["Socket.IO"]
+  HUD_QT["Qt Overlays"]
+end
+
+%% ===========================================================================
+%% Primary Telemetry Flow
+%% ===========================================================================
+F1_SIM ==>|"UDP Packets"| UDP_RECV
+UDP_RECV ==> PARSERS ==> COMP_ENGINE ==> SHARED_STATE
+UDP_RECV -.->|"Forward"| PACKET_FWD -.-> EXT_TGT
+
+%% ===========================================================================
+%% Core State Fan-out
+%% ===========================================================================
+SHARED_STATE ==> API_INTF
+API_INTF ==> HTTP
+API_INTF ==> SOCKETIO
+API_INTF ==> ZMQ_PUB
+
+%% ===========================================================================
+%% MCP Integration
+%% ===========================================================================
+HTTP ==>|"/telemetry-info<br/>/race-info"| MCP_API
+SHARED_STATE -.->|"Real-time data"| TELEMETRY_ANALYZER
+
+TELEMETRY_ANALYZER --> SETUP_ADVISOR
+TELEMETRY_ANALYZER --> STRATEGY_AI
+SETUP_ADVISOR --> TUNING_LOGIC
+STRATEGY_AI --> TRACK_DATA
+STRATEGY_AI --> SETUP_LIBRARY
+
+MCP_API --> AI_ENGINE
+MCP_WS --> AI_ENGINE
+MCP_SSE --> AI_ENGINE
+
+AI_ENGINE -->|"LLM Requests"| LLM_CONNECTOR
+LLM_CONNECTOR ==>|"HTTPS"| OPENROUTER
+LLM_CONNECTOR ==>|"HTTPS"| OPENAI
+LLM_CONNECTOR ==>|"HTTPS"| ANTHROPIC
+
+%% ===========================================================================
+%% nginx Routing
+%% ===========================================================================
+NGINX_HTTP --> API_PROXY
+NGINX_HTTPS --> API_PROXY
+API_PROXY ==>|"/api/*"| MCP_API
+API_PROXY ==>|"/ws"| MCP_WS
+API_PROXY ==>|"/mcp/sse"| MCP_SSE
+API_PROXY ==>|"Telemetry"| HTTP
+
+NGINX_HTTP --> STATIC_SERVER
+NGINX_HTTPS --> STATIC_SERVER
+STATIC_SERVER ==> UI
+
+%% ===========================================================================
+%% Web UI Integration
+%% ===========================================================================
+SOCKETIO ==> STREAM_OVERLAY
+SOCKETIO ==> DRV_VIEW
+SOCKETIO ==> ENG_VIEW
+SOCKETIO ==> STRATEGY_CENTER
+SOCKETIO ==> VOICE_STRATEGY
+
+STRATEGY_CENTER -->|"Chat Messages"| MCP_API
+VOICE_STRATEGY -->|"Chat Messages"| MCP_API
+
+%% ===========================================================================
+%% Voice Integration
+%% ===========================================================================
+VOICE_STRATEGY --> PTT
+PTT --> STT
+STT -->|"Text"| VOICE_STRATEGY
+VOICE_STRATEGY -->|"AI Response"| TTS
+TTS -->|"Audio"| VOICE_STRATEGY
+
+%% ===========================================================================
+%% AI Client Integration
+%% ===========================================================================
+NGINX_HTTPS ==>|"SSE Stream"| CHATGPT
+NGINX_HTTPS ==>|"SSE Stream"| CLAUDE
+NGINX_HTTPS ==>|"MCP Protocol"| CURSOR
+API_PROXY ==>|"REST/WebSocket"| CUSTOM_AI
+
+CHATGPT -.->|"Ask about telemetry"| MCP_SSE
+CLAUDE -.->|"Setup questions"| MCP_SSE
+CURSOR -.->|"Strategy queries"| MCP_SSE
+
+%% ===========================================================================
+%% Low-Latency HUD Distribution
+%% ===========================================================================
+ZMQ_PUB ==> ZMQ_PROXY ==> HUD_SUB ==> HUD_QT
+SOCKETIO ==> HUD_SOCKETIO ==> HUD_QT
+
+%% ===========================================================================
+%% Styling
+%% ===========================================================================
+classDef external fill:#ff7b72,stroke:#ff7b72,color:#0b1020,font-weight:bold
+classDef core fill:#1f6feb,stroke:#58a6ff,color:#e6edf3,font-weight:bold
+classDef mcp fill:#8250df,stroke:#a371f7,color:#e6edf3,font-weight:bold
+classDef proxy fill:#79c0ff,stroke:#a5d6ff,color:#0b1020,font-weight:bold
+classDef ui fill:#db6d28,stroke:#ffa657,color:#0b1020,font-weight:bold
+classDef voice fill:#10b981,stroke:#34d399,color:#0b1020,font-weight:bold
+classDef ai fill:#f778ba,stroke:#ff9dd9,color:#0b1020,font-weight:bold
+classDef llm fill:#d29922,stroke:#f2cc60,color:#0b1020,font-weight:bold
+classDef hud fill:#3fb950,stroke:#56d364,color:#0b1020,font-weight:bold
+
+class F1_SIM,EXT_TGT external
+class CORE,TELEMETRY,STATE,INTF core
+class MCP_LAYER,MCP_SERVER,AI_ENGINE,KNOWLEDGE mcp
+class PROXY proxy
+class UI ui
+class VOICE voice
+class AI_CLIENTS ai
+class LLM llm
+class HUD,PITWALL hud

@@ -1,0 +1,77 @@
+# Complete Docker Compose - Pits N Giggles + MCP + Nginx
+version: '3.8'
+
+services:
+  # Complete Application (Pits N Giggles + MCP Server)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.complete
+    container_name: pits-n-giggles-complete
+    environment:
+      # MCP Configuration
+      - MCP_PORT=8765
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Pits N Giggles Configuration
+      - TELEMETRY_PORT=20777
+      - HTTP_PORT=4768
+    ports:
+      - "4768:4768"  # Pits N Giggles web UI
+      - "8765:8765"  # MCP server
+      - "20777:20777/udp"  # F1 telemetry UDP
+    networks:
+      - f1-network
+    restart: unless-stopped
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4768/health && curl -f http://localhost:8765/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Nginx Reverse Proxy & Static Server
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: f1-nginx-proxy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    networks:
+      - f1-network
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./apps/frontend/html:/usr/share/nginx/html:ro
+      - ./frontend:/usr/share/nginx/frontend:ro
+      - nginx-logs:/var/log/nginx
+      - ./ssl:/etc/nginx/ssl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  f1-network:
+    driver: bridge
+    name: f1-network
+
+volumes:
+  app-data:
+    driver: local
+  app-logs:
+    driver: local
+  nginx-logs:
+    driver: local

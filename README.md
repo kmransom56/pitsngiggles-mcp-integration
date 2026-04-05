@@ -1,155 +1,313 @@
 # F1 Race Engineer MCP Integration for Pits N Giggles
 
-AI-powered Race Engineering for F1 23 using Model Context Protocol (MCP)
+AI-powered Race Engineering for F1 23/24/25 using Model Context Protocol (MCP)
 
 ## 🏎️ Features
 
 - **Real-time Telemetry Analysis** - Live data from Pits N Giggles
 - **AI Race Engineer** - Professional setup and strategy recommendations
+- **Voice Integration** - Speak to your race engineer, hear responses
 - **Setup Diagnostics** - Identify understeer, oversteer, and balance issues
 - **Tyre Strategy** - Optimal pit windows and compound analysis
 - **Fuel Management** - Consumption tracking and saving strategies
-- **Voice Integration Ready** - Speech-to-text and text-to-speech support
+- **AI Client Support** - ChatGPT, Claude, Cursor integration via MCP
 - **Docker-Based Deployment** - One-command setup for any platform
 
-## 🚀 Quick Start with Docker
+## 🚀 Quick Start (5 Minutes)
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- Pits N Giggles running (or will run in Docker)
-- F1 23/24 game running and sending telemetry
+- F1 23, F1 24, or F1 25 game
+- Docker + Docker Compose (OR Python 3.12+)
 
-### Option 1: Simple Docker Deployment
-
-```bash
-# Clone the repository
-git clone https://github.com/kmransom56/pitsngiggles-mcp-integration.git
-cd pitsngiggles-mcp-integration
-
-# Start all services
-docker-compose up -d
-
-# Access the Strategy Center
-# Open https://localhost in your browser
-```
-
-### Option 2: With Custom LLM (OpenAI, etc.)
+### Fastest Path
 
 ```bash
-# Create environment file
-cat > .env << EOF
-LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-LLM_API_KEY=your-api-key-here
-EOF
+# 1. Clone repository
+git clone https://github.com/ashwin-nat/pits-n-giggles.git
+cd pits-n-giggles
 
-# Start services
-docker-compose up -d
+# 2. Start everything
+./start.sh
+# OR with Docker
+docker-compose -f docker-compose.complete.yml up -d
+
+# 3. Configure F1 game
+# Settings → Telemetry → UDP Port: 20777, IP: 127.0.0.1
+
+# 4. Open Voice Strategy Center
+open http://localhost:4768/voice-strategy-center
 ```
+
+**📖 Detailed Guide**: [5-Minute Quickstart](docs/QUICKSTART_5MIN.md)
+
+## 🎙️ Voice-Enabled Race Engineer
+
+Hold **Space**, speak your question, release. Your AI engineer responds with voice!
+
+**Example Commands:**
+- *"Why am I getting understeer in Turn 3?"*
+- *"When should I pit?"*
+- *"Analyze my last lap"*
+- *"Compare my sector times"*
+
+**Zero Cost** - Uses browser's built-in speech APIs. No external services needed!
 
 ## 📋 What Gets Deployed
 
-The Docker Compose stack includes:
+### Complete Stack
 
-1. **MCP Server** (Port 8765)
+1. **Pits N Giggles Backend** (Port 4768)
+   - F1 telemetry receiver (UDP 20777)
+   - Real-time data processing
+   - Web UI server
+
+2. **MCP Server** (Port 8765)
    - F1 Race Engineer AI
    - WebSocket and HTTP APIs
    - Telemetry analysis engine
+   - LLM integration (optional)
 
-2. **Nginx Reverse Proxy** (Ports 80/443)
-   - Serves Strategy Center UI
-   - Proxies to Pits N Giggles telemetry
-   - SSL/TLS with self-signed cert (development)
+3. **Nginx Reverse Proxy** (Ports 80/443)
+   - Serves Strategy Center UIs
+   - Proxies to backend services
+   - SSL/TLS with self-signed cert (dev)
 
-3. **Volumes**
-   - `mcp-data` - Persistent MCP server data
-   - `nginx-logs` - Access and error logs
-   - `ssl-certs` - SSL certificates
+4. **Strategy Centers**
+   - Text-based AI chat
+   - Voice-enabled AI chat
+   - Real-time telemetry display
 
-## 🎮 Usage
+## 🎯 Access Points
 
-### Access Points
+### Main Application
+- **Driver View**: `http://localhost:4768/`
+- **Engineer View**: `http://localhost:4768/eng-view`
 
-- **Strategy Center UI**: https://localhost
-- **MCP HTTP API**: https://localhost/mcp/
-- **MCP WebSocket**: wss://localhost/mcp/ws
-- **Health Check**: https://localhost/health
+### AI Strategy Centers
+- **Strategy Center** (Text): `http://localhost:4768/strategy-center`
+- **Voice Strategy Center**: `http://localhost:4768/voice-strategy-center` ⭐
 
-### Connecting Pits N Giggles
+### MCP Server Endpoints
+- **HTTP API**: `http://localhost:80/api/chat`
+- **WebSocket**: `ws://localhost:80/api/ws`
+- **SSE (AI Clients)**: `http://localhost:80/mcp/sse`
+- **Health Check**: `http://localhost:80/health`
 
-The default configuration assumes Pits N Giggles is running on your host machine on port 4768.
+## 🤖 AI Client Integration
 
-**If Pits N Giggles is on a different host/port**, edit `nginx/conf.d/default.conf`:
+Connect ChatGPT, Claude, or other AI assistants to your telemetry!
 
-```nginx
-location /telemetry/ {
-    proxy_pass http://YOUR_HOST_IP:4768/;
-    # ...
+### ChatGPT Desktop
+
+```json
+{
+  "mcpServers": {
+    "f1-race-engineer": {
+      "command": "npx",
+      "args": ["-y", "sse-mcp-client", "http://localhost:80/mcp/sse"]
+    }
+  }
 }
 ```
 
-Then restart:
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "f1-race-engineer": {
+      "url": "http://localhost:80/mcp/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+**📖 Full Setup**: [AI Client Setup Guide](docs/AI_CLIENT_SETUP.md)
+
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   F1 23/24/25   │      │  Pits N Giggles │      │   AI Clients    │
+│   Telemetry     │─────▶│   Backend       │◀─────│ (ChatGPT/Claude)│
+│  UDP :20777     │      │   :4768         │      │   via SSE       │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+                                │                           │
+                                ▼                           ▼
+                         ┌─────────────────────────────────────┐
+                         │      nginx Reverse Proxy           │
+                         │      :80 (HTTP) :443 (HTTPS)       │
+                         └─────────────────────────────────────┘
+                                │                   │
+                    ┌───────────┴─────┬─────────────┘
+                    ▼                 ▼
+          ┌─────────────────┐  ┌─────────────────┐
+          │ Strategy Centers│  │   MCP Server    │
+          │  (Voice + Text) │  │   :8765         │
+          │  (Browser)      │  │ F1 AI Engineer  │
+          └─────────────────┘  └─────────────────┘
+                    ▲                   ▼
+                    │             ┌─────────────┐
+                    └─────────────│  LLM APIs   │
+                                 │(OpenRouter) │
+                                 └─────────────┘
+```
+
+## 📚 Documentation
+
+### Quick Start
+- **⭐ [5-Minute Quickstart](docs/QUICKSTART_5MIN.md)** - Fastest way to get started
+- **[Complete F1 Agent Guide](docs/COMPLETE_F1_AGENT_GUIDE.md)** - Comprehensive reference
+- **[Building from Source](docs/BUILDING.md)** - Manual installation
+
+### Features
+- **[Voice Integration](docs/VOICE_INTEGRATION.md)** - Speech-to-text, text-to-speech setup
+- **[F1 Race Engineer Agent](docs/F1_RACE_ENGINEER_AGENT.md)** - Agent capabilities & behavior
+- **[Strategy Center](docs/STRATEGY_CENTER.md)** - Using the AI chat interface
+
+### Deployment
+- **[Docker Quickstart](docs/DOCKER_QUICKSTART.md)** - Docker-specific guide
+- **[Docker MCP Toolkit](docs/DOCKER_MCP_TOOLKIT_SUBMISSION.md)** - Docker Hub submission
+
+### Integration
+- **[AI Client Setup](docs/AI_CLIENT_SETUP.md)** - ChatGPT, Claude, Cursor configuration
+- **[MCP Integration](docs/MCP_INTEGRATION.md)** - Technical MCP details
+
+## 🔧 Configuration
+
+### Optional: LLM API Key
+
+For enhanced AI responses, add your API key to `.env.mcp`:
+
 ```bash
-docker-compose restart nginx
+# Get free key from https://openrouter.ai/keys
+LLM_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+LLM_API_KEY=sk-or-v1-your-key-here
+LLM_MODEL=openai/gpt-4o-mini
 ```
 
-## 🤖 AI Configuration
+**Without API key**: Agent works with intelligent fallback responses based on telemetry analysis.
 
-### Using OpenAI or Compatible LLMs
+## 🧪 Testing
 
-1. Set environment variables in `.env`:
-```bash
-LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-LLM_API_KEY=sk-your-key-here
-```
-
-2. Restart MCP server:
-```bash
-docker-compose restart mcp-server
-```
-
-### Supported AI Clients
-
-- **OpenAI** (GPT-4, GPT-3.5)
-- **Anthropic Claude** (via API)
-- **Local LLMs** (Ollama, LM Studio, etc.)
-- **Azure OpenAI**
-- **Any OpenAI-compatible endpoint**
-
-See `docs/AI_CLIENT_SETUP.md` for detailed configuration.
-
-## 🔧 Advanced Configuration
-
-### Custom Ports
-
-Edit `docker-compose.yml`:
-
-```yaml
-services:
-  mcp-server:
-    ports:
-      - "YOUR_PORT:8765"
-  
-  nginx:
-    ports:
-      - "YOUR_HTTP_PORT:80"
-      - "YOUR_HTTPS_PORT:443"
-```
-
-### Production SSL Certificates
-
-Replace self-signed certs with real ones:
+Run the integration test suite:
 
 ```bash
-# Copy your certs
-cp /path/to/fullchain.pem docker-volumes/ssl-certs/
-cp /path/to/privkey.pem docker-volumes/ssl-certs/
-
-# Update nginx config
-# Edit nginx/conf.d/default.conf ssl_certificate paths
+./test-integration.sh
 ```
 
-### Running Pits N Giggles in Docker
+Tests verify:
+- ✅ Pits N Giggles backend
+- ✅ MCP server health
+- ✅ Web UIs accessible
+- ✅ Docker containers running
+
+## 🎓 F1 Race Engineer Capabilities
+
+### What the Agent Knows
+
+**Aerodynamics**
+- Increase front wing → Better turn-in grip (fixes understeer)
+- Increase rear wing → More stability (fixes oversteer)
+
+**Differential**
+- Lower on-throttle → More rotation on exit
+- Lower off-throttle → More rotation on entry
+
+**Suspension**
+- Stiffen rear ARB → Reduce oversteer
+- Stiffen front ARB → Reduce understeer
+
+**Brake Bias**
+- Forward (55-58%) → Reduce oversteer under braking
+- Rear (50-53%) → Reduce understeer under braking
+
+### Example Interactions
+
+**You**: *"I'm getting massive understeer in slow corners"*
+
+**Engineer**: 
+```
+Based on your telemetry, I see front tyre temps are 15°C cooler than rears.
+Recommendations:
+1. Increase front wing by 2 clicks
+2. Reduce front ARB stiffness by 1 click  
+3. Front tyre pressure: +0.2 PSI
+This will improve front-end grip while maintaining balance.
+```
+
+## 🆘 Troubleshooting
+
+### No Telemetry Data
+
+```bash
+# Check F1 game UDP settings
+# Must be: Port 20777, IP 127.0.0.1
+
+# Test backend
+curl http://localhost:4768/health
+```
+
+### MCP Server Issues
+
+```bash
+# Check logs
+docker-compose -f docker-compose.mcp.yml logs mcp-server
+
+# Verify port
+lsof -i :8765
+
+# Check configuration
+cat .env.mcp
+```
+
+### Voice Not Working
+
+- **Browser**: Use Chrome or Edge (best support)
+- **Permissions**: Allow microphone access
+- **HTTPS**: Some browsers require HTTPS for voice
+
+### Quick Reset
+
+```bash
+# Stop all services
+./stop.sh
+docker-compose -f docker-compose.mcp.yml down
+
+# Remove volumes
+docker-compose -f docker-compose.mcp.yml down -v
+
+# Start fresh
+./start.sh
+```
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+## 🙏 Credits
+
+- **Pits N Giggles**: Original platform by Ashwin Natarajan
+- **MCP Integration**: F1 Race Engineer AI
+- **Voice Features**: Browser-based STT/TTS
+- **Community**: All contributors and testers
+
+## 💬 Support
+
+- **Issues**: https://github.com/ashwin-nat/pits-n-giggles/issues
+- **Discussions**: https://github.com/ashwin-nat/pits-n-giggles/discussions
+- **Documentation**: [docs/](docs/)
+
+---
+
+**🏁 Happy Racing! 🏎️💨**
 
 Uncomment the `pits-n-giggles` service in `docker-compose.yml`:
 

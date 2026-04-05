@@ -96,9 +96,9 @@ source .venv/bin/activate
 echo "Installing dependencies with ${USE_UV:+uv}${USE_UV:-pip}..."
 if [ "$USE_UV" = true ]; then
     # Fix uv cache permissions if needed
-    mkdir -p ~/.cache/uv
-    chmod 755 ~/.cache/uv
-    uv pip install --quiet -e .
+    mkdir -p ~/.cache/uv 2>/dev/null || true
+    chmod 755 ~/.cache/uv 2>/dev/null || true
+    uv pip install --quiet -e . 2>/dev/null || pip install --quiet -e .
 else
     pip install --quiet --upgrade pip
     pip install --quiet -e .
