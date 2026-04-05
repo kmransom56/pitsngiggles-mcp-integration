@@ -1,17 +1,59 @@
 # Pits n' Giggles
-**Real-time in-game overlays + advanced F1 telemetry dashboards.**
+**Real-time in-game overlays + advanced F1 telemetry dashboards + AI Race Engineer.**
 *(Because racing fast is good. Racing smart is better.)*
 
 ![HUD Overlay](screenshots/hud.png)
 
+---
+
+## 🚀 Quick Start (2 Minutes)
+
+```bash
+# Linux/macOS
+./start.sh
+
+# Windows
+start.bat
+```
+
+**Then open:** `http://localhost:4768/strategy-center` 🏎️
+
+**Full Guide:** [QUICKSTART.md](QUICKSTART.md)
+
+---
+
+## 🆕 NEW: F1 Race Engineer AI
+
+Get **data-driven race engineering advice** with the built-in F1 Race Engineer AI!
+
+**Features:**
+- 🔧 **Setup Recommendations** - Based on real telemetry data
+- 📊 **Performance Analysis** - Lap consistency, tyre deg, sector times
+- 🏁 **Strategic Advice** - Pit windows, pace comparison, time loss analysis
+- 🤖 **10 Advanced MCP Tools** - Intelligent telemetry analysis
+
+**Access Points:**
+- **Built-in:** `http://localhost:4768/strategy-center` (no setup needed!)
+- **ChatGPT/Claude:** Connect via MCP for deeper conversations
+- **Cursor/VS Code:** AI + telemetry while coding
+
+**Guides:**
+- [Quick Start](QUICKSTART.md) - Get running in 2 minutes
+- [F1 Agent Setup](docs/F1_RACE_ENGINEER_QUICK_SETUP.md) - AI client configs
+- [MCP Integration](docs/MCP_INTEGRATION.md) - Full MCP guide
+- [AI Client Setup](docs/AI_CLIENT_SETUP.md) - 10+ AI tools supported
+
+---
+
 ## Overview
 
-Pits n' Giggles is a lightweight F1 telemetry companion that brings two major capabilities together:
+Pits n' Giggles is a lightweight F1 telemetry companion that brings three major capabilities together:
 
 1. **In-game, always-on-top racing overlays** - lightweight HUD widgets you use *while driving*.
 2. **Deep-dive telemetry dashboards** - advanced analysis for tyre wear, lap times, fuel modelling, and more.
+3. **AI Race Engineer** - intelligent analysis and strategic advice powered by live telemetry data.
 
-Whether you're racing, streaming, analysing performance, or coaching remotely, Pits n' Giggles provides real-time insights without ever slowing you down.
+Whether you're racing, streaming, analysing performance, coaching remotely, or getting AI-powered advice, Pits n' Giggles provides real-time insights without ever slowing you down.
 
 ---
 

@@ -34,6 +34,7 @@ from apps.backend.state_mgmt_layer.intf import (DriverInfoRsp,
                                                 StreamOverlayData)
 from lib.child_proc_mgmt import notify_parent_init_complete
 from lib.config import PngSettings
+from lib.mcp_server import MCPServer
 from lib.web_server import BaseWebServer, ClientType
 
 # -------------------------------------- GLOBALS -----------------------------------------------------------------------
@@ -95,6 +96,7 @@ class TelemetryWebServer(BaseWebServer):
         self.m_show_start_sample_data = settings.StreamOverlay.show_sample_data_at_start
         self.m_session_state: SessionState = session_state
         self.m_disable_browser_autoload = settings.Display.disable_browser_autoload
+        self.m_mcp_server = MCPServer(session_state, logger)
 
     def define_routes(self) -> None:
         """
@@ -105,6 +107,7 @@ class TelemetryWebServer(BaseWebServer):
 
         self._defineTemplateFileRoutes()
         self._defineDataRoutes()
+        self._defineMCPRoutes()
 
     def _defineTemplateFileRoutes(self) -> None:
         """
@@ -141,6 +144,16 @@ class TelemetryWebServer(BaseWebServer):
                 str: Rendered HTML content for the stream overlay page.
             """
             return await self.render_template('player-stream-overlay.html')
+
+        @self.http_route('/strategy-center')
+        async def strategyCenter() -> str:
+            """
+            Render the AI-powered strategy center page.
+
+            Returns:
+                str: Rendered HTML content for the strategy center.
+            """
+            return await self.render_template('strategy-center.html')
 
     def _defineDataRoutes(self) -> None:
         """
@@ -216,6 +229,52 @@ class TelemetryWebServer(BaseWebServer):
 
         # Process parameters and generate response
         return DriverInfoRsp(self.m_session_state, index_int).toJSON(), HTTPStatus.OK
+
+    def _defineMCPRoutes(self) -> None:
+        """
+        Define Model Context Protocol (MCP) routes for AI tool integration.
+        
+        Sets up Server-Sent Events endpoint for ChatGPT, Claude, Cursor, etc.
+        """
+        @self.http_route('/mcp')
+        async def mcpEndpoint():
+            """
+            MCP Server-Sent Events endpoint for AI tools.
+            
+            Provides real-time telemetry data access to AI assistants using
+            the Model Context Protocol over SSE.
+            """
+            from quart import Response
+            
+            async def generate():
+                async for event in self.m_mcp_server.stream_events():
+                    yield event
+            
+            return Response(
+                generate(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'X-Accel-Buffering': 'no',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                }
+            )
+        
+        @self.http_route('/mcp/tools', methods=['POST'])
+        async def mcpToolsEndpoint():
+            """
+            Handle MCP tool invocation requests.
+            
+            Allows AI tools to call specific telemetry functions via POST.
+            """
+            import json
+            data = await self.request.get_json()
+            method = data.get('method', 'tools/list')
+            params = data.get('params', {})
+            
+            result = await self.m_mcp_server.handle_request(method, params)
+            return self.jsonify(result), HTTPStatus.OK
 
     async def _post_start(self) -> None:
         """Function to be called after the server starts serving."""

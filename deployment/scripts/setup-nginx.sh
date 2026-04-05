@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Setup Nginx reverse proxy for Pits n' Giggles MCP server
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NGINX_CONF="$SCRIPT_DIR/../nginx/pitsngiggles-mcp.conf"
+
+echo "=== Pits n' Giggles Nginx MCP Proxy Setup ==="
+echo ""
+
+# Check if nginx is installed
+if ! command -v nginx &> /dev/null; then
+    echo "Error: nginx is not installed"
+    echo "Install with: sudo apt install nginx"
+    exit 1
+fi
+
+# Generate SSL certificate
+echo "Step 1: Generating SSL certificate..."
+bash "$SCRIPT_DIR/generate-self-signed-cert.sh" /etc/nginx/ssl/pitsngiggles localhost
+
+# Copy nginx config
+echo ""
+echo "Step 2: Installing Nginx configuration..."
+sudo cp "$NGINX_CONF" /etc/nginx/sites-available/pitsngiggles-mcp.conf
+
+# Enable site
+if [ -f /etc/nginx/sites-enabled/pitsngiggles-mcp.conf ]; then
+    echo "Configuration already enabled, replacing..."
+    sudo rm /etc/nginx/sites-enabled/pitsngiggles-mcp.conf
+fi
+sudo ln -s /etc/nginx/sites-available/pitsngiggles-mcp.conf /etc/nginx/sites-enabled/
+
+# Test nginx config
+echo ""
+echo "Step 3: Testing Nginx configuration..."
+if sudo nginx -t; then
+    echo "✓ Nginx configuration is valid"
+else
+    echo "✗ Nginx configuration test failed"
+    exit 1
+fi
+
+# Reload nginx
+echo ""
+echo "Step 4: Reloading Nginx..."
+sudo systemctl reload nginx || sudo systemctl restart nginx
+
+echo ""
+echo "=== Setup Complete! ==="
+echo ""
+echo "Your Pits n' Giggles MCP server is now accessible via:"
+echo "  • HTTPS: https://localhost:8443/mcp"
+echo "  • HTTP:  http://localhost:80 (redirects to HTTPS)"
+echo ""
+echo "Next steps:"
+echo "  1. Start Pits n' Giggles with MCP server enabled"
+echo "  2. Configure your AI tool to connect to: https://localhost:8443/mcp"
+echo "  3. Accept the self-signed certificate in your browser/AI tool"
+echo ""
+echo "To check Nginx status: sudo systemctl status nginx"
+echo "To view logs: sudo tail -f /var/log/nginx/pitsngiggles-mcp.error.log"

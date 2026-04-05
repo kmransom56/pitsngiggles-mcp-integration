@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Race Strategy Center | Pits n' Giggles</title>
+    <meta name="description" content="F1 Race Strategy Center - Live telemetry with AI-powered race engineering analysis">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #05070a;
+            --sidebar-bg: rgba(12, 14, 18, 0.92);
+            --accent-primary: #00f2ff;
+            --accent-secondary: #a855f7;
+            --accent-warm: #f97316;
+            --text-main: #e0e4e8;
+            --text-muted: rgba(255, 255, 255, 0.45);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --sidebar-width: 420px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body, html {
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+        }
+
+        .layout-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .telemetry-frame-container {
+            flex-grow: 1;
+            position: relative;
+            background: #000;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        iframe#telemetry-view {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.6);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+            overflow: hidden;
+            border-left: none;
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            left: -36px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 64px;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            color: var(--accent-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 200;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(0, 242, 255, 0.1);
+            width: 32px;
+            left: -40px;
+        }
+
+        .sidebar-toggle .arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.collapsed .sidebar-toggle .arrow {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, rgba(0, 242, 255, 0.06), rgba(168, 85, 247, 0.04), transparent);
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.05rem;
+            text-transform: uppercase;
+            letter-spacing: 2.5px;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-header small {
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(0, 242, 255, 0.08);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-primary);
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent-primary); }
+            50% { opacity: 0.4; }
+        }
+
+        .chat-container {
+            flex-grow: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 90%;
+            font-size: 0.88rem;
+            line-height: 1.55;
+            animation: fadeSlideIn 0.35s ease-out;
+        }
+
+        .message.ai {
+            background: rgba(255, 255, 255, 0.04);
+            align-self: flex-start;
+            border-left: 2px solid var(--accent-primary);
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, rgba(0, 242, 255, 0.15), rgba(168, 85, 247, 0.1));
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            align-self: flex-end;
+        }
+
+        .message.system {
+            background: rgba(249, 115, 22, 0.08);
+            border-left: 2px solid var(--accent-warm);
+            align-self: center;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .msg-label {
+            display: block;
+            font-size: 0.62rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-primary);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .quick-actions {
+            padding: 10px 16px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .quick-btn {
+            padding: 5px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quick-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: rgba(0, 242, 255, 0.06);
+        }
+
+        .chat-input {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(0, 242, 255, 0.1);
+        }
+
+        button.send-btn {
+            background: linear-gradient(135deg, var(--accent-primary), #00c4d6);
+            color: #000;
+            border: none;
+            padding: 0 18px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        button.send-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0, 242, 255, 0.3);
+        }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout-container">
+        <div class="telemetry-frame-container">
+            <iframe id="telemetry-view" src="/eng-view" title="Telemetry Engineering View"></iframe>
+        </div>
+
+        <aside class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" id="toggle-btn">
+                <span class="arrow">&#9654;</span>
+            </button>
+
+            <div class="sidebar-header">
+                <div class="header-top">
+                    <div>
+                        <h2>F1 Race Engineer</h2>
+                        <small>Powered by MCP • F1 23/24/25</small>
+                    </div>
+                    <div class="status-badge">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container" id="chat-container">
+                <div class="message system">
+                    Connecting to Pits n' Giggles MCP server...
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <button class="quick-btn" data-msg="What are the current race conditions?">Race Status</button>
+                <button class="quick-btn" data-msg="I have understeer in slow corners, what should I change?">Fix Understeer</button>
+                <button class="quick-btn" data-msg="Analyze my tyre degradation and suggest pit window">Tyre Strategy</button>
+                <button class="quick-btn" data-msg="Compare my lap times to P1 and tell me where I'm losing time">Performance Gap</button>
+                <button class="quick-btn" data-msg="Give me a balanced setup for this track">Setup Advice</button>
+            </div>
+
+            <div class="chat-input">
+                <input type="text" id="chat-input" placeholder="Ask about race strategy, tyres, performance..." autocomplete="off">
+                <button class="send-btn" id="send-btn">Send</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // Configuration - Choose AI mode
+        const AI_MODE = localStorage.getItem('ai_mode') || 'openai'; // 'openai' or 'mcp'
+        const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+        const OPENAI_KEY = localStorage.getItem('openai_api_key') || '';
+        const MCP_ENDPOINT = '/mcp/tools';
+        
+        // DOM Elements
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const chatContainer = document.getElementById('chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const statusText = document.getElementById('status-text');
+
+        // Sidebar Toggle
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+
+        // Message Functions
+        function addMessage(text, type = 'user') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            if (type === 'ai') {
+                msg.innerHTML = `<span class="msg-label">Race Engineer</span>${text}`;
+            } else if (type === 'system') {
+                msg.textContent = text;
+            } else {
+                msg.textContent = text;
+            }
+            chatContainer.appendChild(msg);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            const indicator = document.createElement('div');
+            indicator.className = 'message system';
+            indicator.id = 'typing';
+            indicator.textContent = 'Race Engineer is analyzing...';
+            chatContainer.appendChild(indicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            const el = document.getElementById('typing');
+            if (el) el.remove();
+        }
+
+        // MCP Tool Functions
+        async function callMCPTool(toolName, args = {}) {
+            try {
+                const response = await fetch(MCP_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        method: 'tools/call',
+                        params: {
+                            name: toolName,
+                            arguments: args
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`MCP call failed: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+
+                // Extract text from MCP response
+                if (data.content && data.content[0] && data.content[0].text) {
+                    return data.content[0].text;
+                }
+                
+                return JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('MCP Error:', error);
+                throw error;
+            }
+        }
+
+        // Intelligent query routing based on keywords
+        async function routeMCPQuery(question) {
+            const q = question.toLowerCase();
+            
+            // Route to specific MCP tools based on question content
+            if (q.includes('race condition') || q.includes('race status') || q.includes('weather') || q.includes('safety car')) {
+                return await callMCPTool('get_race_info');
+            }
+            else if (q.includes('tyre') || q.includes('tire') || q.includes('compound') || q.includes('stint')) {
+                const match = q.match(/driver[s]?\s+(\d+)/g);
+                if (match) {
+                    const indices = match.map(m => parseInt(m.match(/\d+/)[0]));
+                    return await callMCPTool('analyze_tyre_strategy', { driver_indices: indices });
+                }
+                return await callMCPTool('analyze_tyre_strategy');
+            }
+            else if (q.includes('lap') && (q.includes('compare') || q.includes('comparison'))) {
+                return await callMCPTool('get_lap_comparison');
+            }
+            else if (q.includes('driver') && q.match(/driver\s+(\d+)/)) {
+                const driverIndex = parseInt(q.match(/driver\s+(\d+)/)[1]);
+                return await callMCPTool('get_driver_info', { driver_index: driverIndex });
+            }
+            else if (q.includes('standing') || q.includes('position') || q.includes('all drivers')) {
+                return await callMCPTool('get_telemetry_data');
+            }
+            else if (q.includes('overlay') || q.includes('stream')) {
+                return await callMCPTool('get_stream_overlay_data');
+            }
+            else {
+                // Default: get general telemetry
+                return await callMCPTool('get_telemetry_data');
+            }
+        }
+
+        // F1 Race Engineer System Prompt
+        const F1_ENGINEER_PROMPT = `You are a professional F1 Race Engineer with deep expertise in car setup, telemetry analysis, and performance optimization for F1 23/24/25 games.
+
+Your primary responsibilities:
+1. Analyze telemetry data from Pits n' Giggles to identify performance bottlenecks
+2. Diagnose handling issues (understeer, oversteer, balance problems)
+3. Recommend specific, actionable setup changes with exact values
+4. Map corner phases (Entry, Apex, Exit) to mechanical adjustments
+5. Provide track-specific setup guidance
+
+Core Setup Knowledge:
+AERO: Front wing (turn-in grip) | Rear wing (stability, traction)
+DIFF: On-throttle (50-60% rotation, 70-80% stability) | Off-throttle (similar for entry)
+ARB: Stiffer front = less understeer | Stiffer rear = less oversteer
+BRAKES: Forward bias (56-58%) = front bite | Rear bias (52-54%) = rotation
+SUSPENSION: Stiffer = responsive | Softer = mechanical grip
+
+Common Solutions:
+UNDERSTEER ON ENTRY: Front wing +1, Front ARB -2, Brake bias +1%, Off-throttle diff -5%
+OVERSTEER ON EXIT: Rear wing +1, Rear ARB -2, On-throttle diff +5%, Rear susp +1
+LACK OF ROTATION: Rear ARB -2, Off-throttle diff -10%, Brake bias +2%, Front wing +1
+UNSTABLE ON POWER: On-throttle diff +10%, Rear wing +2, Rear susp +1
+
+Response Format:
+🔧 [ISSUE] ANALYSIS
+Diagnosis: [What's wrong]
+Root Cause: [Why it's happening]
+Recommendations:
+1. [Component]: [From X to Y] - [Reasoning]
+2. [Component]: [From X to Y] - [Reasoning]
+Expected Impact: [What improves | Trade-offs]
+Next Steps: [What to monitor]
+
+Be concise, technical, and actionable. Provide 2-3 specific changes maximum with exact values.`;
+
+        // OpenAI integration with F1 Race Engineer expertise
+        async function sendToOpenAI(question, telemetryContext) {
+            const response = await fetch(OPENAI_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: F1_ENGINEER_PROMPT
+                        },
+                        {
+                            role: 'user',
+                            content: `${telemetryContext}\n\nQuestion: ${question}`
+                        }
+                    ]
+                })
+            });
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        // Main message handler
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            chatInput.value = '';
+            showTyping();
+
+            try {
+                let response;
+
+                if (AI_MODE === 'mcp') {
+                    // Use MCP endpoints directly
+                    response = await routeMCPQuery(text);
+                    
+                    // Parse and format the JSON response
+                    try {
+                        const jsonData = JSON.parse(response);
+                        response = formatMCPResponse(text, jsonData);
+                    } catch {
+                        // If not JSON, use as-is
+                    }
+                } else {
+                    // Use OpenAI with telemetry context
+                    if (!OPENAI_KEY) {
+                        hideTyping();
+                        addMessage('Please set your OpenAI API key: localStorage.setItem("openai_api_key", "sk-...")', 'system');
+                        return;
+                    }
+
+                    const telemetryData = await fetch('/telemetry-info').then(r => r.json()).catch(() => null);
+                    const raceInfo = await fetch('/race-info').then(r => r.json()).catch(() => null);
+                    
+                    let context = '';
+                    if (telemetryData && raceInfo) {
+                        context = `Current Race Data:\n${JSON.stringify({race: raceInfo, telemetry: telemetryData}, null, 2)}`;
+                    }
+
+                    response = await sendToOpenAI(text, context);
+                }
+
+                hideTyping();
+                addMessage(response, 'ai');
+
+            } catch (error) {
+                hideTyping();
+                console.error('AI Error:', error);
+                addMessage(`Error: ${error.message}. Try switching AI mode or check your configuration.`, 'system');
+            }
+        }
+
+        // Format MCP response into human-readable text
+        function formatMCPResponse(question, data) {
+            const q = question.toLowerCase();
+            
+            if (data.race_status || data.session_type) {
+                // Race info response
+                return `📊 **Race Status**\n\n` +
+                    `Session: ${data.session_type}\n` +
+                    `Lap: ${data.current_lap}/${data.total_laps}\n` +
+                    `Status: ${data.race_status}\n` +
+                    `Track Temp: ${data.track_temperature}°C\n` +
+                    `Air Temp: ${data.air_temperature}°C\n` +
+                    `Weather: ${data.weather || 'Clear'}`;
+            }
+            else if (data.drivers && Array.isArray(data.drivers)) {
+                // Tyre strategy or driver list
+                if (q.includes('tyre') || q.includes('tire')) {
+                    let result = `🏎️ **Tyre Analysis**\n\n`;
+                    data.drivers.slice(0, 5).forEach(d => {
+                        result += `**${d.name}**: ${d.current_tyre || 'Unknown'} (${d.tyre_age || 0} laps, ${d.tyre_wear || 0}% wear)\n`;
+                    });
+                    return result;
+                } else {
+                    let result = `🏁 **Current Standings**\n\n`;
+                    data.drivers.slice(0, 10).forEach((d, i) => {
+                        result += `${i+1}. ${d.name || `Driver ${i}`} - ${d.last_lap_time || 'N/A'}\n`;
+                    });
+                    return result;
+                }
+            }
+            else if (data.name) {
+                // Single driver info
+                return `👤 **${data.name}**\n\n` +
+                    `Position: P${data.position}\n` +
+                    `Last Lap: ${data.last_lap_time_ms}ms\n` +
+                    `Best Lap: ${data.best_lap_time_ms}ms\n` +
+                    `Tyre: ${data.current_tyre} (${data.tyre_age} laps)`;
+            }
+            
+            // Fallback: return formatted JSON
+            return JSON.stringify(data, null, 2);
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Quick Actions
+        document.querySelectorAll('.quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                chatInput.value = btn.dataset.msg;
+                sendMessage();
+            });
+        });
+
+        // Initialize
+        async function init() {
+            try {
+                const response = await fetch('/race-info');
+                if (response.ok) {
+                    statusText.textContent = 'Live';
+                    const mode = AI_MODE === 'mcp' ? 'MCP' : 'OpenAI GPT-4';
+                    addMessage(`F1 Race Engineer online (${mode} mode). I can analyze telemetry, diagnose handling issues, and provide expert setup advice for F1 23/24/25. Ask me about understeer, oversteer, tyre strategy, or car setup.`, 'ai');
+                    
+                    if (AI_MODE === 'openai' && !OPENAI_KEY) {
+                        addMessage('💡 Tip: Set OpenAI API key with: localStorage.setItem("openai_api_key", "sk-...")', 'system');
+                    }
+                } else {
+                    statusText.textContent = 'Offline';
+                    addMessage('Could not connect to telemetry server. Make sure Pits n\' Giggles is running.', 'system');
+                }
+            } catch (error) {
+                statusText.textContent = 'Error';
+                addMessage('Connection error. Check that the backend is running.', 'system');
+            }
+        }
+
+        init();
+
+        // Allow mode switching via console
+        window.switchAIMode = (mode) => {
+            if (mode === 'mcp' || mode === 'openai') {
+                localStorage.setItem('ai_mode', mode);
+                location.reload();
+            } else {
+                console.log('Usage: switchAIMode("mcp") or switchAIMode("openai")');
+            }
+        };
+        console.log('💡 Current AI mode:', AI_MODE);
+        console.log('💡 Switch mode: switchAIMode("mcp") or switchAIMode("openai")');
+    </script>
+</body>
+</html>
