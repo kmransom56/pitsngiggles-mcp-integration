@@ -100,7 +100,7 @@ if [ "$USE_UV" = true ]; then
     chmod -R 755 ~/.cache/uv 2>/dev/null || true
     
     # Install dependencies directly (no editable mode needed for this app)
-    cd mcp_server && uv pip install -r requirements.txt && cd .. || { echo "Failed to install MCP dependencies"; }
+    cd mcp_server && UV_NO_CACHE=1 uv pip install -r requirements.txt && cd .. || { echo "Failed to install MCP dependencies"; }
 else
     echo "Warning: uv not found, some features may not work"
 fi
