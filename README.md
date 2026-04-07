@@ -88,11 +88,14 @@ Hold **Space**, speak your question, release. Your AI engineer responds with voi
 - **Strategy Center** (Text): `http://localhost:4768/strategy-center`
 - **Voice Strategy Center**: `http://localhost:4768/voice-strategy-center` ⭐
 
-### MCP Server Endpoints
-- **HTTP API**: `http://localhost:80/api/chat`
-- **WebSocket**: `ws://localhost:80/api/ws`
-- **SSE (AI Clients)**: `http://localhost:80/mcp/sse`
-- **Health Check**: `http://localhost:80/health`
+### MCP Stack (`docker-compose.mcp.yml`: **mcp-server + nginx** only)
+
+**Docker MCP** (`mcp_server`, no SSE):
+
+- **Direct**: `POST http://localhost:8765/mcp/chat`, `WebSocket ws://localhost:8765/mcp/ws`, `GET http://localhost:8765/health`
+- **Via nginx** (default compose ports): `http://localhost:9080/...`, `https://localhost:9443/...` under `/mcp/`
+
+**PNG on the host** (`:4768`) — **SSE** for MCP-style clients is here: `GET http://localhost:4768/mcp`. Through nginx: **`https://localhost:9443/telemetry/mcp`**.
 
 ## 🤖 AI Client Integration
 
@@ -100,12 +103,14 @@ Connect ChatGPT, Claude, or other AI assistants to your telemetry!
 
 ### ChatGPT Desktop
 
+Use the **PNG SSE** URL (not the Docker MCP container — it does not implement SSE). With default nginx TLS and self-signed cert, your client must allow insecure TLS or use HTTP to PNG directly.
+
 ```json
 {
   "mcpServers": {
     "f1-race-engineer": {
       "command": "npx",
-      "args": ["-y", "sse-mcp-client", "http://localhost:80/mcp/sse"]
+      "args": ["-y", "sse-mcp-client", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
@@ -117,14 +122,16 @@ Connect ChatGPT, Claude, or other AI assistants to your telemetry!
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost:80/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "transport": "sse"
     }
   }
 }
 ```
 
-**📖 Full Setup**: [AI Client Setup Guide](docs/AI_CLIENT_SETUP.md)
+For **HTTP straight to PNG** (no nginx): use `http://localhost:4768/mcp`.
+
+**📖 Full Setup**: [AI Client Setup Guide](docs/mcp/AI_CLIENT_SETUP.md) (paths may differ if `AI_CLIENT_SETUP.md` lives under `docs/` only — check repo)
 
 
 ## 🏗️ Architecture

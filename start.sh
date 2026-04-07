@@ -271,13 +271,14 @@ if [ "$START_MCP" = true ]; then
     echo ""
     
     if [ "$MCP_MODE" = "docker" ]; then
-        echo -e "${GREEN}MCP Server:${NC}"
-        echo "  ${ARROW} MCP API: http://localhost:80/api/chat"
-        echo "  ${ARROW} MCP WebSocket: ws://localhost:80/api/ws"
-        echo "  ${ARROW} MCP SSE (AI Clients): http://localhost:80/mcp/sse"
-        echo "  ${ARROW} Health Check: http://localhost:80/health"
+        echo -e "${GREEN}MCP + nginx (docker-compose.mcp.yml):${NC}"
+        echo "  ${ARROW} MCP direct: http://localhost:8765/mcp/chat, ws://localhost:8765/mcp/ws"
+        echo "  ${ARROW} Via nginx HTTP: http://localhost:9080/mcp/chat, ws://localhost:9080/mcp/ws"
+        echo "  ${ARROW} SSE (PNG via nginx): https://localhost:9443/telemetry/mcp"
+        echo "  ${ARROW} SSE direct PNG: http://localhost:4768/mcp"
+        echo "  ${ARROW} Health (nginx): http://localhost:9080/health"
         if [ "$NGINX_AVAILABLE" = true ]; then
-            echo "  ${ARROW} HTTPS: https://localhost:443"
+            echo "  ${ARROW} HTTPS: https://localhost:9443"
         fi
     else
         echo -e "${GREEN}MCP Server:${NC}"
@@ -306,7 +307,7 @@ if [ "$START_MCP" = true ]; then
     echo -e "${CYAN}AI Client Setup:${NC}"
     echo "  ${ARROW} ChatGPT Desktop: See docs/AI_CLIENT_SETUP.md"
     echo "  ${ARROW} Claude Desktop: See docs/AI_CLIENT_SETUP.md"
-    echo "  ${ARROW} API Endpoint: http://localhost/mcp/sse"
+    echo "  ${ARROW} SSE (AI clients): https://localhost:9443/telemetry/mcp — see docs/mcp/AI_CLIENT_SETUP.md"
     echo ""
 fi
 
