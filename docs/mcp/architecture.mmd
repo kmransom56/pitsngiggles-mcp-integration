@@ -35,7 +35,7 @@ subgraph DOCKER[" Docker Environment (f1-network)"]
   
   subgraph NGINX_CONTAINER[" Nginx Reverse Proxy Container"]
     direction TB
-    NGINX[" nginx<br/>Port 80/443"]
+    NGINX[" nginx<br/>Host :9080/:9443 → 80/443"]
     SSL[" SSL/TLS<br/>Self-Signed + Production"]
     STATIC_FILES[" Static HTML Files<br/>Strategy Center, Voice, Dashboards"]
   end
@@ -109,10 +109,10 @@ PNG_STATE -.->|Socket.IO| NGINX
 %% ===========================================================================
 %% Nginx Routing
 %% ===========================================================================
-NGINX ==>|"/api/*"<br/>Chat & WebSocket| MCP_APP
-NGINX ==>|"/mcp/*"<br/>SSE Events| MCP_APP
+NGINX ==>|"/mcp/*"<br/>POST /mcp/chat, WS /mcp/ws| MCP_APP
+NGINX ==>|"/telemetry/*"<br/>→ PNG :4768| PNG_HOST
 NGINX ==>|"/"<br/>Frontend Pages| FRONTEND
-NGINX -.->|Proxy to Host<br/>host:4768| PNG_HOST
+NGINX ==>|"/health"| MCP_APP
 
 %% ===========================================================================
 %% MCP Server Internal
@@ -133,7 +133,7 @@ LLM_CLIENT -.->|Via OpenRouter| GOOGLE
 %% ===========================================================================
 %% Browser Connections
 %% ===========================================================================
-BROWSER ==>|HTTPS<br/>https://localhost| NGINX
+BROWSER ==>|HTTPS<br/>https://localhost:9443| NGINX
 NGINX ==>|Serve HTML| STRATEGY_CENTER
 NGINX ==>|Serve HTML| VOICE_STRATEGY
 NGINX ==>|Serve HTML| ENG_VIEW
@@ -143,9 +143,9 @@ NGINX ==>|Serve HTML| STREAM_OVERLAY
 %% ===========================================================================
 %% Strategy Center Integration
 %% ===========================================================================
-STRATEGY_CENTER ==>|POST /api/chat<br/>with Telemetry| MCP_APP
-STRATEGY_CENTER ==>|WebSocket /api/ws| MCP_APP
-STRATEGY_CENTER ==>|Fetch Telemetry<br/>/telemetry-info| NGINX
+STRATEGY_CENTER ==>|POST /mcp/chat<br/>via nginx /mcp/| MCP_APP
+STRATEGY_CENTER ==>|WebSocket /mcp/ws| MCP_APP
+STRATEGY_CENTER ==>|Telemetry HTML/API<br/>/telemetry/ or :4768| NGINX
 
 %% ===========================================================================
 %% Voice Integration (Browser-Based)
@@ -157,9 +157,9 @@ VOICE_STRATEGY -.->|Web Speech API TTS<br/>Local Synthesis| BROWSER
 %% ===========================================================================
 %% AI Client Integration (MCP Protocol)
 %% ===========================================================================
-AI_CLIENTS ==>|SSE Connection<br/>GET /mcp/sse| NGINX
-NGINX ==>|Forward SSE| MCP_APP
-MCP_APP ==>|MCP Tools Response| AI_CLIENTS
+AI_CLIENTS ==>|SSE GET /telemetry/mcp<br/>(PNG GET /mcp)| NGINX
+NGINX ==>|strip /telemetry/ → :4768| PNG_HOST
+PNG_HOST ==>|SSE event stream| AI_CLIENTS
 
 %% ===========================================================================
 %% Response Flow
@@ -167,7 +167,7 @@ MCP_APP ==>|MCP Tools Response| AI_CLIENTS
 OPENROUTER ==>|AI Response<br/>Setup Recommendations| LLM_CLIENT
 LLM_CLIENT ==> F1_AGENT
 F1_AGENT ==>|Formatted Response<br/>+ Analysis<br/>+ Recommendations<br/>+ Telemetry Insights| MCP_APP
-MCP_APP ==>|JSON Response<br/>POST /api/chat| NGINX
+MCP_APP ==>|JSON /mcp/chat| NGINX
 NGINX ==>|HTTPS| STRATEGY_CENTER
 NGINX ==>|HTTPS + Voice| VOICE_STRATEGY
 
