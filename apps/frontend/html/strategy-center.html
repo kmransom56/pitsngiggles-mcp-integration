@@ -40,11 +40,74 @@
             position: relative;
             background: #000;
             transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .telemetry-view-switcher {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+            padding: 8px 14px;
+            background: rgba(5, 7, 10, 0.97);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .telemetry-view-switcher .switcher-label {
+            margin-right: 4px;
+            font-weight: 600;
+        }
+
+        .telemetry-view-switcher .view-tab {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            text-transform: none;
+            transition: all 0.2s ease;
+        }
+
+        .telemetry-view-switcher .view-tab:hover {
+            border-color: rgba(0, 242, 255, 0.35);
+            color: var(--accent-primary);
+        }
+
+        .telemetry-view-switcher .view-tab.active {
+            background: rgba(0, 242, 255, 0.12);
+            border-color: rgba(0, 242, 255, 0.45);
+            color: var(--accent-primary);
+        }
+
+        .telemetry-view-switcher .strategy-mode-link {
+            margin-left: auto;
+            color: var(--accent-secondary);
+            text-decoration: none;
+            font-size: 0.7rem;
+            letter-spacing: 0.04em;
+            text-transform: none;
+        }
+
+        .telemetry-view-switcher .strategy-mode-link:hover {
+            text-decoration: underline;
         }
 
         iframe#telemetry-view {
             width: 100%;
-            height: 100%;
+            flex: 1;
+            min-height: 0;
             border: none;
             background: transparent;
         }
@@ -281,12 +344,49 @@
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        html.embed-chat-only .telemetry-frame-container {
+            display: none !important;
+        }
+
+        html.embed-chat-only .layout-container {
+            min-height: 100vh;
+        }
+
+        html.embed-chat-only .sidebar {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            flex: 1 1 auto;
+            border-left: none;
+            box-shadow: none;
+        }
+
+        html.embed-chat-only .sidebar-toggle {
+            display: none;
+        }
     </style>
+    <script>
+        (function () {
+            try {
+                var p = new URLSearchParams(location.search);
+                if (p.get("embed") === "chat") {
+                    document.documentElement.classList.add("embed-chat-only");
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
     <div class="layout-container">
         <div class="telemetry-frame-container">
-            <iframe id="telemetry-view" src="/eng-view" title="Telemetry Engineering View"></iframe>
+            <div class="telemetry-view-switcher" role="toolbar" aria-label="Pits n Giggles telemetry view">
+                <span class="switcher-label">Telemetry</span>
+                <button type="button" class="view-tab" data-telemetry-src="/" title="Driver dashboard">Driver</button>
+                <button type="button" class="view-tab" data-telemetry-src="/eng-view" title="Race engineer tables">Engineer</button>
+                <a class="strategy-mode-link" href="/voice-strategy-center?embed=chat">Voice mode →</a>
+            </div>
+            <iframe id="telemetry-view" src="/eng-view" title="Pits n Giggles telemetry"></iframe>
         </div>
 
         <aside class="sidebar" id="sidebar">
@@ -343,6 +443,50 @@
         const chatInput = document.getElementById('chat-input');
         const sendBtn = document.getElementById('send-btn');
         const statusText = document.getElementById('status-text');
+        const telemetryIframe = document.getElementById('telemetry-view');
+        const telemetryTabs = document.querySelectorAll('.telemetry-view-switcher .view-tab');
+        const TELEMETRY_STORAGE_KEY = 'png_strategy_telemetry_src';
+        const TELEMETRY_DEFAULT = '/eng-view';
+
+        function applyTelemetrySrc(src) {
+            if (!telemetryIframe || !src) return;
+            const resolved = new URL(src, window.location.origin).pathname;
+            const nextHref = new URL(resolved, window.location.origin).href;
+            if (telemetryIframe.src !== nextHref) {
+                telemetryIframe.src = resolved;
+            }
+            telemetryIframe.title =
+                resolved === '/' || resolved === ''
+                    ? "Pits n Giggles — Driver view"
+                    : "Pits n Giggles — Engineer view";
+            telemetryTabs.forEach((tab) => {
+                tab.classList.toggle('active', tab.dataset.telemetrySrc === resolved);
+            });
+            try {
+                sessionStorage.setItem(TELEMETRY_STORAGE_KEY, resolved);
+            } catch (e) {}
+        }
+
+        (function initTelemetrySwitcher() {
+            const params = new URLSearchParams(window.location.search);
+            const param = (params.get('telemetry') || '').toLowerCase();
+            let initial = TELEMETRY_DEFAULT;
+            if (param === 'driver' || param === '/') initial = '/';
+            else if (param === 'eng' || param === 'engineer' || param === 'eng-view')
+                initial = '/eng-view';
+            else {
+                try {
+                    const saved = sessionStorage.getItem(TELEMETRY_STORAGE_KEY);
+                    if (saved === '/' || saved === '/eng-view') initial = saved;
+                } catch (e) {}
+            }
+            applyTelemetrySrc(initial);
+            telemetryTabs.forEach((tab) => {
+                tab.addEventListener('click', () =>
+                    applyTelemetrySrc(tab.dataset.telemetrySrc)
+                );
+            });
+        })();
 
         // Sidebar Toggle
         toggleBtn.addEventListener('click', () => {

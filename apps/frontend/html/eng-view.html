@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/barChart.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tyreStintHistoryModal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/raceStatsModal.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ai-drawer.css') }}">
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/msgpack-lite@0.1.26/dist/msgpack.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
@@ -43,6 +44,12 @@
                                 <a id="driver-view-btn" class="btn settings-button" href="/" data-bs-toggle="tooltip" data-bs-title="Switch to driver view">
                                     <i class="bi bi-car-front-fill"></i>
                                 </a>
+                                <button type="button" id="strategy-center-btn" class="btn settings-button" data-bs-toggle="tooltip" data-bs-title="Open AI Race Engineer (chat)">
+                                    <i class="bi bi-chat-dots-fill"></i>
+                                </button>
+                                <button type="button" id="voice-strategy-center-btn" class="btn settings-button" data-bs-toggle="tooltip" data-bs-title="Open AI Race Engineer (voice)">
+                                    <i class="bi bi-mic-fill"></i>
+                                </button>
                                 <button id="settings-btn" class="btn settings-button" data-bs-toggle="tooltip" data-bs-title="Table columns settings"><i class="bi bi-gear-fill"></i></button>
                             </div>
                         </div>
@@ -213,6 +220,24 @@
       </div>
     </div>
 
+    <div id="png-ai-drawer-backdrop" class="png-ai-drawer-backdrop" aria-hidden="true"></div>
+    <div id="png-ai-drawer" class="png-ai-drawer" role="dialog" aria-modal="true" aria-labelledby="png-ai-drawer-title" aria-hidden="true">
+      <div class="png-ai-drawer-toolbar">
+        <span id="png-ai-drawer-title" class="png-ai-drawer-title">AI Race Engineer</span>
+        <div class="png-ai-drawer-tabs">
+          <button type="button" class="png-ai-drawer-tab active" data-tab="chat">Chat</button>
+          <button type="button" class="png-ai-drawer-tab" data-tab="voice">Voice</button>
+        </div>
+        <button type="button" id="png-ai-drawer-close" class="png-ai-drawer-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="png-ai-drawer-body">
+        <iframe id="png-ai-drawer-iframe" class="png-ai-drawer-iframe" title="AI Race Engineer" data-active-tab=""></iframe>
+      </div>
+      <div class="png-ai-drawer-footer">
+        <a href="/strategy-center" target="_blank" rel="noopener">Open full layout with telemetry pane</a>
+      </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/preferences.js') }}"></script>
     <script src="{{ url_for('static', filename='js/socketio.js') }}"></script>
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
@@ -231,5 +256,6 @@
     <script src="{{ url_for('static', filename='js/barChart.js') }}"></script>
     <script src="{{ url_for('static', filename='js/tyreStintHistoryModal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/engView.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ai-drawer.js') }}"></script>
 </body>
 </html>
