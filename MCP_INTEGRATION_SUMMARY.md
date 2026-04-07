@@ -14,7 +14,7 @@ A complete, production-ready MCP (Model Context Protocol) server integration for
 - **Multiple interfaces**:
   - REST API (`/api/chat`) for web frontend
   - WebSocket (`/api/ws`) for real-time communication
-  - SSE (`/mcp/sse`) for AI client connections
+  - SSE on PNG: `GET /mcp` (e.g. `https://localhost:9443/telemetry/mcp` through nginx)
   - Health check (`/health`) for monitoring
 
 ### 2. Nginx Reverse Proxy

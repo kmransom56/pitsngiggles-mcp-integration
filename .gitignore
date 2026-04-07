@@ -1,3 +1,8 @@
+# Local env / API keys — copy from .env.example or .env.mcp.example
+.env
+.env.mcp
+.env.local
+
 launch.json
 *.pyc
 *.log
@@ -30,3 +35,4 @@ png-venv/
 htmlcov/
 coverage_reports/
 *.diff
+*.egg-info/

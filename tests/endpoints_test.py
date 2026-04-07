@@ -71,7 +71,10 @@ endpoints_config = {
     "/race-info": [200],
     "/driver-info?index=0": [200, 404],
     "/stream-overlay-info": [200],
+    "/strategy-center": [200],
+    "/voice-strategy-center": [200],
     "/static/css/style.css": [200],
+    "/static/css/ai-drawer.css": [200],
     "/static/css/modals.css": [200],
     "/static/css/weather.css": [200],
     "/static/css/conditions.css": [200],
@@ -91,6 +94,7 @@ endpoints_config = {
     "/static/js/telemetryRenderer.js": [200],
     "/static/js/frontendUpdate.js": [200],
     "/static/js/app.js": [200],
+    "/static/js/ai-drawer.js": [200],
 }
 
 # Example hostname and port

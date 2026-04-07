@@ -102,7 +102,7 @@ The F1 Race Engineer MCP (Model Context Protocol) integration transforms Pits N 
 - ✅ Custom MCP clients
 
 **Connection Method:**
-- SSE (Server-Sent Events) endpoint: `/mcp/sse`
+- SSE (Server-Sent Events) on **PNG**: `GET /mcp` (via nginx: `/telemetry/mcp`)
 - WebSocket support: `/api/ws`
 - REST API: `/api/chat`
 
@@ -227,7 +227,7 @@ Browser      AI Clients (ChatGPT, Claude, etc.)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/mcp/sse` | GET | MCP SSE stream for AI clients |
+| `/mcp` (PNG `:4768`) | GET | MCP SSE stream for AI clients; via nginx `https://localhost:9443/telemetry/mcp` |
 | `/api/chat` | POST | Chat with F1 Race Engineer |
 | `/api/ws` | WebSocket | Real-time chat connection |
 | `/health` | GET | Health check |

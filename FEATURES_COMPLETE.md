@@ -303,7 +303,7 @@ MCP_PORT=8765
 curl http://localhost/health
 
 # Test MCP endpoint
-curl http://localhost/mcp/sse
+curl -skN https://localhost:9443/telemetry/mcp
 ```
 
 ### Full Test

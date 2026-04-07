@@ -33,7 +33,7 @@ else
     OS="Unknown"
 fi
 
-echo -e "${BLUE}[1/5] Checking prerequisites...${NC}"
+echo -e "${BLUE}[1/6] Checking prerequisites...${NC}"
 
 # Check Python
 if command -v python3 &> /dev/null; then
@@ -81,7 +81,7 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}[2/5] Setting up Python environment...${NC}"
+echo -e "${BLUE}[2/6] Setting up Python environment...${NC}"
 
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
@@ -131,7 +131,7 @@ fi
 echo -e "${GREEN}${CHECK} Dependencies installed${NC}"
 
 echo ""
-echo -e "${BLUE}[3/5] Checking MCP configuration...${NC}"
+echo -e "${BLUE}[3/6] Checking MCP configuration...${NC}"
 
 # Ask about MCP server
 echo ""
@@ -143,6 +143,8 @@ echo ""
 read -p "Start MCP server? (y/N): " -n 1 -r
 echo ""
 
+START_MCP=false
+MCP_MODE=""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     START_MCP=true
     
@@ -208,7 +210,7 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}[4/5] Starting services...${NC}"
+echo -e "${BLUE}[4/6] Starting services...${NC}"
 
 # Start main Pits n' Giggles application
 echo "Starting Pits n' Giggles backend..."
@@ -236,8 +238,12 @@ if [ "$START_MCP" = true ]; then
                 -subj "/C=US/ST=State/L=City/O=PitsNGiggles/CN=localhost" 2>/dev/null
         fi
         
-        # Start with Docker Compose
-        docker-compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+        # Start with Docker Compose (V2 plugin preferred)
+        if docker compose version &>/dev/null; then
+            docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+        else
+            docker-compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+        fi
         echo -e "${GREEN}${CHECK} MCP server started (Docker)${NC}"
     else
         # Start MCP server natively
@@ -250,7 +256,22 @@ if [ "$START_MCP" = true ]; then
 fi
 
 echo ""
-echo -e "${BLUE}[5/5] Initialization complete!${NC}"
+echo -e "${BLUE}[5/6] Verifying dashboard pages and AI drawer...${NC}"
+VERIFY_ARGS=()
+if [ "$START_MCP" = true ]; then
+  VERIFY_ARGS+=(--mcp)
+  if [ "$MCP_MODE" = "docker" ]; then
+    VERIFY_ARGS+=(--nginx-proxy)
+  fi
+fi
+if bash "${PWD}/scripts/verify-png-stack.sh" "${VERIFY_ARGS[@]}"; then
+  echo -e "${GREEN}${CHECK} Stack verification passed${NC}"
+else
+  echo -e "${YELLOW}${ARROW} Verification reported issues — check URLs and logs above${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}[6/6] Initialization complete!${NC}"
 
 # Display access information
 echo ""
@@ -281,9 +302,9 @@ if [ "$START_MCP" = true ]; then
             echo "  ${ARROW} HTTPS: https://localhost:9443"
         fi
     else
-        echo -e "${GREEN}MCP Server:${NC}"
-        echo "  ${ARROW} MCP API: http://localhost:8765/api/chat"
-        echo "  ${ARROW} MCP WebSocket: ws://localhost:8765/api/ws"
+        echo -e "${GREEN}MCP Server (native mcp_server/server.py):${NC}"
+        echo "  ${ARROW} MCP API: http://localhost:8765/mcp/chat"
+        echo "  ${ARROW} MCP WebSocket: ws://localhost:8765/mcp/ws"
         echo "  ${ARROW} Health Check: http://localhost:8765/health"
     fi
     echo ""
@@ -322,7 +343,7 @@ echo ""
 
 echo -e "${RED}To Stop:${NC}"
 if [ "$START_MCP" = true ] && [ "$MCP_MODE" = "docker" ]; then
-    echo "  ./stop.sh && docker-compose -f docker-compose.mcp.yml down"
+    echo "  ./stop.sh && docker compose -f docker-compose.mcp.yml down  (or docker-compose ...)"
 else
     echo "  ./stop.sh"
 fi

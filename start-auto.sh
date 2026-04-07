@@ -28,7 +28,10 @@ fi
 # Install dependencies
 echo "Installing dependencies..."
 .venv/bin/pip install --quiet --upgrade pip setuptools wheel
-.venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic \
+if [ -f "requirements.txt" ]; then
+    .venv/bin/pip install --quiet -r requirements.txt || true
+fi
+.venv/bin/pip install --quiet jinja2 python-socketio quart gevent psutil pydantic packaging \
     uvicorn msgpack pyzmq requests aiohttp websocket-client markdown orjson
 
 # Install MCP server dependencies
@@ -44,6 +47,14 @@ echo $BACKEND_PID > .backend.pid
 
 # Wait for backend to initialize
 sleep 3
+
+echo ""
+echo "Verifying dashboard pages (AI drawer embed)..."
+if bash "${PWD}/scripts/verify-png-stack.sh"; then
+  echo -e "${GREEN}✅ Verification passed${NC}"
+else
+  echo -e "${YELLOW}⚠ Verification failed — is port 4768 reachable?${NC}"
+fi
 
 echo ""
 echo -e "${GREEN}✅ Deployment Complete!${NC}"

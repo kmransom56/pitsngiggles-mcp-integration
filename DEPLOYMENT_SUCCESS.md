@@ -83,7 +83,7 @@ Add to `%APPDATA%\com.openai.chat\config.json`:
 {
   "mcpServers": {
     "pits-n-giggles": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "name": "F1 Race Engineer",
       "description": "F1 telemetry analysis and race engineering"
     }
@@ -252,7 +252,7 @@ curl -X POST http://localhost:8765/mcp/chat \
 
 ### 5. Test MCP SSE Stream
 ```bash
-curl -N http://localhost/mcp/sse
+curl -N https://localhost:9443/telemetry/mcp
 ```
 Should keep connection open and stream events.
 

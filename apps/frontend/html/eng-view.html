@@ -224,9 +224,9 @@
     <div id="png-ai-drawer" class="png-ai-drawer" role="dialog" aria-modal="true" aria-labelledby="png-ai-drawer-title" aria-hidden="true">
       <div class="png-ai-drawer-toolbar">
         <span id="png-ai-drawer-title" class="png-ai-drawer-title">AI Race Engineer</span>
-        <div class="png-ai-drawer-tabs">
-          <button type="button" class="png-ai-drawer-tab active" data-tab="chat">Chat</button>
-          <button type="button" class="png-ai-drawer-tab" data-tab="voice">Voice</button>
+        <div class="png-ai-drawer-tabs" role="tablist" aria-label="AI mode">
+          <button type="button" class="png-ai-drawer-tab active" data-tab="chat" role="tab" aria-selected="true" id="png-ai-tab-chat">Chat</button>
+          <button type="button" class="png-ai-drawer-tab" data-tab="voice" role="tab" aria-selected="false" id="png-ai-tab-voice">Voice</button>
         </div>
         <button type="button" id="png-ai-drawer-close" class="png-ai-drawer-close" aria-label="Close">&times;</button>
       </div>
@@ -234,7 +234,7 @@
         <iframe id="png-ai-drawer-iframe" class="png-ai-drawer-iframe" title="AI Race Engineer" data-active-tab=""></iframe>
       </div>
       <div class="png-ai-drawer-footer">
-        <a href="/strategy-center" target="_blank" rel="noopener">Open full layout with telemetry pane</a>
+        <a id="png-ai-drawer-footer-link" href="/strategy-center" target="_blank" rel="noopener">Open full layout with telemetry pane</a>
       </div>
     </div>
 

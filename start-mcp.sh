@@ -2,6 +2,7 @@
 # Start F1 Race Engineer MCP Server
 
 set -e
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 echo "🏎️  Starting F1 Race Engineer MCP Server..."
 
@@ -30,9 +31,27 @@ fi
 # Load environment variables
 export $(cat .env.mcp | grep -v '^#' | xargs)
 
-# Start Docker Compose
+# Start Docker Compose (V2 plugin preferred)
 echo "🚀 Starting services..."
-docker-compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+if docker compose version &>/dev/null; then
+  docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+else
+  docker-compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+fi
+
+echo ""
+echo "⏳ Waiting for MCP healthcheck and nginx..."
+sleep 4
+
+export MCP_HEALTH="http://127.0.0.1:${MCP_PORT:-8765}/health"
+export NGINX_HEALTH="http://127.0.0.1:${HTTP_PORT:-9080}/health"
+echo "🔎 Verifying MCP + nginx (${MCP_HEALTH}, ${NGINX_HEALTH})..."
+if bash "${PWD}/scripts/verify-png-stack.sh" --mcp-stack-only; then
+  echo "✅ MCP stack verification passed"
+else
+  echo "⚠️  MCP stack verification failed — check: docker compose -f docker-compose.mcp.yml logs"
+  exit 1
+fi
 
 echo ""
 echo "✅ F1 Race Engineer MCP Server is running!"
@@ -56,6 +75,6 @@ echo "   1. Start Pits N Giggles on the host (or uncomment in docker-compose.mcp
 echo "   2. Open Strategy Center in your browser"
 echo "   3. Point ChatGPT/Claude SSE clients at https://localhost:${HTTPS_PORT:-9443}/telemetry/mcp (skip TLS verify for self-signed)"
 echo ""
-echo "📊 View logs: docker-compose -f docker-compose.mcp.yml logs -f"
+echo "📊 View logs: docker compose -f docker-compose.mcp.yml logs -f  (or docker-compose ...)"
 echo "🛑 Stop: ./stop-mcp.sh"
 echo ""

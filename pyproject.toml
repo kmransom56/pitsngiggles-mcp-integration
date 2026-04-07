@@ -28,10 +28,21 @@ dependencies = [
     "orjson (>=3.11.5,<4.0.0)",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "colorama (>=0.4.6,<0.5.0)",
+    "tabulate (>=0.9.0,<0.10.0)",
+]
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["apps*", "mcp_server*"]
+namespaces = true
+
 [tool.poetry.group.dev.dependencies]
 tqdm = "^4.67.1"
 deepdiff = "^8.4.2"

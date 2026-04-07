@@ -218,7 +218,7 @@ curl -X POST http://localhost:8765/mcp/chat \
 
 ### SSE Stream (for AI clients)
 ```bash
-curl -N http://localhost/mcp/sse
+curl -skN https://localhost:9443/telemetry/mcp
 ```
 
 ## 📦 Repository Status
@@ -241,7 +241,7 @@ curl -N http://localhost/mcp/sse
 2. **Submit to MCP Toolkit**
    - Repository URL: https://github.com/kmransom56/pitsngiggles-mcp-integration
    - Docker Image: kmransom56/pits-n-giggles-mcp:latest
-   - MCP Endpoint: http://localhost/mcp/sse
+   - SSE (PNG): https://localhost:9443/telemetry/mcp — MCP HTTP: http://localhost:8765/mcp/chat
    - Tools: 6 telemetry analysis tools
 
 3. **Create Release**

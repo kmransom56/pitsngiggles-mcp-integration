@@ -260,7 +260,7 @@ The images are ready for publishing:
       "args": [
         "-y",
         "@modelcontextprotocol/server-sse",
-        "http://localhost/mcp/sse"
+        "https://localhost:9443/telemetry/mcp"
       ]
     }
   }

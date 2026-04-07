@@ -226,7 +226,7 @@ Add to `~/Library/Application Support/ChatGPT/config.json` (macOS):
   "mcpServers": {
     "pitsngiggles": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sse", "http://localhost/mcp/sse"]
+      "args": ["-y", "@modelcontextprotocol/server-sse", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }

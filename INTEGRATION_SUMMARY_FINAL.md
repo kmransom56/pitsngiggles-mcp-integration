@@ -37,7 +37,7 @@
 - **MCP endpoints** properly wired up
 
 ### ✅ AI Client Support
-- **SSE endpoint** at `/mcp/sse` for ChatGPT/Claude Desktop
+- **SSE** on PNG: `GET /mcp` (`https://localhost:9443/telemetry/mcp` via nginx)
 - **WebSocket** at `/mcp/ws` for real-time clients
 - **REST API** at `/mcp/chat` for custom clients
 - **Documentation** for ChatGPT, Claude, Cursor integration
@@ -67,7 +67,7 @@ F1 Game → UDP :20777 → Pits N Giggles :4768 → Strategy Centers
 ### MCP Server
 - **HTTP API**: http://localhost:80/api/chat
 - **WebSocket**: ws://localhost:80/api/ws
-- **SSE (AI Clients)**: http://localhost:80/mcp/sse
+- **SSE (AI Clients, PNG)**: https://localhost:9443/telemetry/mcp or http://localhost:4768/mcp
 - **Health**: http://localhost:80/health
 
 ### nginx
@@ -214,7 +214,7 @@ Exit traction → Lower on-throttle diff
   "mcpServers": {
     "f1-race-engineer": {
       "command": "npx",
-      "args": ["-y", "sse-mcp-client", "http://localhost:80/mcp/sse"]
+      "args": ["-y", "sse-mcp-client", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
@@ -225,7 +225,7 @@ Exit traction → Lower on-throttle diff
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost:80/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "transport": "sse"
     }
   }
