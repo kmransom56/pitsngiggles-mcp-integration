@@ -32,23 +32,26 @@ echo.
 echo ✅ F1 Race Engineer MCP Server is running!
 echo.
 echo 📍 Access Points:
-echo    - MCP Server: http://localhost:8765
-echo    - Nginx Proxy: http://localhost:80
-echo    - HTTPS: https://localhost:443
-echo    - Strategy Center: http://localhost/strategy-center
-echo    - Voice Strategy: http://localhost/voice-strategy-center
+echo    - MCP Server (direct): http://localhost:8765
+echo    - Nginx HTTP (default): http://localhost:9080
+echo    - Nginx HTTPS (default): https://localhost:9443
+echo    - Pits N Giggles (host): http://localhost:4768
+echo    - Strategy Center: http://localhost:4768/strategy-center
+echo    - Voice Strategy: http://localhost:4768/voice-strategy-center
 echo.
-echo 🔧 API Endpoints:
-echo    - Chat API: http://localhost/api/chat
-echo    - WebSocket: ws://localhost/api/ws
-echo    - MCP SSE (for AI clients): http://localhost/mcp/sse
-echo    - Health Check: http://localhost/health
+echo 🔧 Endpoints:
+echo    - MCP POST /mcp/chat (direct): http://localhost:8765/mcp/chat
+echo    - MCP WebSocket: ws://localhost:8765/mcp/ws
+echo    - Via nginx: http://localhost:9080/mcp/...
+echo    - SSE for AI clients (PNG): https://localhost:9443/telemetry/mcp
+echo    - SSE direct to PNG: http://localhost:4768/mcp
+echo    - Health (nginx): http://localhost:9080/health
 echo.
 echo 📖 Next Steps:
 echo    1. Start F1 23/24/25 and enable UDP telemetry (port 20777)
 echo    2. Start Pits N Giggles on the host (or in Docker)
 echo    3. Open Strategy Center in your browser
-echo    4. Connect AI clients (ChatGPT, Claude) to http://localhost/mcp/sse
+echo    4. Point ChatGPT/Claude SSE at https://localhost:9443/telemetry/mcp
 echo.
 echo 📊 View logs: docker-compose -f docker-compose.mcp.yml logs -f
 echo 🛑 Stop: stop-mcp.bat

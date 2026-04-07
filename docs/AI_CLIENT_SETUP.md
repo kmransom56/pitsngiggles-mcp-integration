@@ -1,8 +1,10 @@
 # 🤖 AI Client Configuration Guide
 
+> **Canonical doc:** use [docs/mcp/AI_CLIENT_SETUP.md](mcp/AI_CLIENT_SETUP.md) and [docs/DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md). This file is retained for links; **SSE** is on **PNG** (`GET /mcp`, e.g. `https://localhost:9443/telemetry/mcp` via nginx), not on Docker `mcp_server` (which exposes **`POST /mcp/chat`** and **`WebSocket /mcp/ws`** only).
+
 Complete guide for connecting various AI tools to the Pits n' Giggles MCP server.
 
-**MCP Endpoint:** `https://localhost:8443/mcp` (or your server URL)
+**SSE endpoint (PNG):** `https://localhost:9443/telemetry/mcp` or `http://localhost:4768/mcp`
 
 ---
 

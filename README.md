@@ -131,7 +131,7 @@ Use the **PNG SSE** URL (not the Docker MCP container — it does not implement 
 
 For **HTTP straight to PNG** (no nginx): use `http://localhost:4768/mcp`.
 
-**📖 Full Setup**: [AI Client Setup Guide](docs/mcp/AI_CLIENT_SETUP.md) (paths may differ if `AI_CLIENT_SETUP.md` lives under `docs/` only — check repo)
+**📖 Full Setup**: [AI Client Setup Guide](docs/mcp/AI_CLIENT_SETUP.md)
 
 
 ## 🏗️ Architecture

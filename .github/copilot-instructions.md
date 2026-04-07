@@ -23,7 +23,7 @@ You now have a **complete, production-ready F1 Race Engineer AI** integrated int
 ### 3. **MCP Server** ✅
 - REST API at `/api/chat`
 - WebSocket at `/api/ws`
-- SSE endpoint at `/mcp/sse` for AI clients
+- Docker MCP (`mcp_server`): `POST /mcp/chat`, `WebSocket /mcp/ws` — not SSE. PNG on :4768 serves SSE at `GET /mcp`; via nginx use `/telemetry/mcp` (e.g. `https://localhost:9443/telemetry/mcp`).
 - Health checks and monitoring
 - Docker containerized
 
