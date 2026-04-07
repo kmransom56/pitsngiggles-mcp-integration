@@ -28,14 +28,14 @@ Pits n' Giggles with MCP integration transforms your F1 gaming experience by add
 git clone https://github.com/kmransom56/pitsngiggles-mcp-integration.git
 cd pitsngiggles-mcp-integration
 
-# Start everything (includes MCP server, nginx, and main app)
-docker-compose up -d
+# MCP + nginx only (PNG runs on the host :4768)
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
 
-# Access the application
-# Web UI: http://localhost:4768
-# Strategy Center: http://localhost:4768/strategy-center
-# Voice Strategy: http://localhost:4768/voice-strategy-center
-# MCP Endpoint: http://localhost/mcp/sse
+# Access
+# Pits N Giggles (host): http://localhost:4768
+# Docker MCP direct: http://localhost:8765/mcp/chat, ws://localhost:8765/mcp/ws
+# Via nginx: http://localhost:9080/mcp/..., https://localhost:9443/mcp/...
+# SSE for AI clients (PNG, not mcp_server): https://localhost:9443/telemetry/mcp or http://localhost:4768/mcp
 ```
 
 ### Configuration
@@ -97,7 +97,7 @@ Add to `%APPDATA%\com.openai.chat\config.json`:
 {
   "mcpServers": {
     "pits-n-giggles": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "name": "F1 Race Engineer",
       "description": "F1 23/24/25 telemetry analysis and race engineering"
     }
@@ -115,7 +115,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   "mcpServers": {
     "pits-n-giggles": {
       "command": "curl",
-      "args": ["-N", "http://localhost/mcp/sse"]
+      "args": ["-N", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
@@ -127,7 +127,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 Add to Cursor settings → MCP Servers:
 ```
-http://localhost/mcp/sse
+https://localhost:9443/telemetry/mcp
 ```
 </details>
 
@@ -276,7 +276,7 @@ curl -X POST http://localhost/mcp/chat \
   -d '{"message": "What causes understeer in slow corners?"}'
 
 # Test SSE stream (for AI clients)
-curl -N http://localhost/mcp/sse
+curl -N https://localhost:9443/telemetry/mcp
 ```
 
 ### Test Voice Features

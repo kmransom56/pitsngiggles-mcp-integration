@@ -188,11 +188,15 @@ ws.onmessage = (event) => {
 
 ### MCP SSE (for AI Clients)
 
+Served by **Pits N Giggles** (PNG) on the host, not by Docker `mcp_server`:
+
 ```
-GET /mcp/sse
+GET /mcp
 ```
 
-Connect ChatGPT Desktop, Claude, or other MCP clients to this endpoint.
+Examples: `http://localhost:4768/mcp` or, via nginx from `docker-compose.mcp.yml`, `https://localhost:9443/telemetry/mcp` (maps to PNG `GET /mcp`).
+
+Docker MCP exposes **`POST /mcp/chat`** and **`WebSocket /mcp/ws`** only (e.g. `http://localhost:8765`).
 
 ## 🎤 Voice Commands
 
@@ -219,7 +223,7 @@ Add to `~/Library/Application Support/ChatGPT/config.json`:
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse"
+      "url": "https://localhost:9443/telemetry/mcp"
     }
   }
 }
@@ -233,7 +237,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse"
+      "url": "https://localhost:9443/telemetry/mcp"
     }
   }
 }
@@ -245,7 +249,7 @@ Add to `.cursorrules`:
 
 ```
 Use f1-race-engineer MCP server for F1 telemetry analysis.
-Endpoint: http://localhost/mcp/sse
+SSE (PNG): https://localhost:9443/telemetry/mcp — MCP HTTP/WS: http://localhost:8765/mcp/
 ```
 
 ## 🏗️ Architecture
