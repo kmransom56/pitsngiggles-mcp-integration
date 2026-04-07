@@ -227,14 +227,14 @@ TTS -->|"Audio"| VOICE_STRATEGY
 %% ===========================================================================
 %% AI Client Integration
 %% ===========================================================================
-NGINX_HTTPS ==>|"SSE Stream"| CHATGPT
-NGINX_HTTPS ==>|"SSE Stream"| CLAUDE
-NGINX_HTTPS ==>|"MCP Protocol"| CURSOR
-API_PROXY ==>|"REST/WebSocket"| CUSTOM_AI
+NGINX_HTTPS ==>|"SSE /telemetry/mcp"| CHATGPT
+NGINX_HTTPS ==>|"SSE /telemetry/mcp"| CLAUDE
+NGINX_HTTPS ==>|"HTTPS /mcp/*"| CURSOR
+API_PROXY ==>|"/mcp/* REST/WS"| CUSTOM_AI
 
-CHATGPT -.->|"Ask about telemetry"| MCP_SSE
-CLAUDE -.->|"Setup questions"| MCP_SSE
-CURSOR -.->|"Strategy queries"| MCP_SSE
+CHATGPT -.->|"PNG GET /mcp"| HTTP
+CLAUDE -.->|"PNG GET /mcp"| HTTP
+CURSOR -.->|"Docker MCP"| MCP_API
 
 %% ===========================================================================
 %% Low-Latency HUD Distribution
