@@ -48,7 +48,7 @@ subgraph CORE[" Pits N Giggles Core"]
 
   subgraph INTF[" Core Interfaces"]
     direction TB
-    HTTP["HTTP Server :4768"]
+    HTTP["HTTP Server :4768<br/>incl. GET /mcp SSE (PNG)"]
     SOCKETIO["Socket.IO"]
     ZMQ_PUB["ZMQ Publisher"]
     IPC["IPC Server"]
@@ -61,11 +61,10 @@ end
 subgraph MCP_LAYER[" F1 Race Engineer (MCP)"]
   direction TB
   
-  subgraph MCP_SERVER[" MCP Server :8765"]
+  subgraph MCP_SERVER[" MCP Server :8765 (Docker)"]
     direction TB
-    MCP_API["REST API /mcp/chat"]
+    MCP_API["REST POST /mcp/chat"]
     MCP_WS["WebSocket /mcp/ws"]
-    MCP_SSE["SSE /mcp/sse"]
   end
   
   subgraph AI_ENGINE[" AI Engine"]
@@ -185,7 +184,6 @@ STRATEGY_AI --> SETUP_LIBRARY
 
 MCP_API --> AI_ENGINE
 MCP_WS --> AI_ENGINE
-MCP_SSE --> AI_ENGINE
 
 AI_ENGINE -->|"LLM Requests"| LLM_CONNECTOR
 LLM_CONNECTOR ==>|"HTTPS"| OPENROUTER
@@ -197,10 +195,9 @@ LLM_CONNECTOR ==>|"HTTPS"| ANTHROPIC
 %% ===========================================================================
 NGINX_HTTP --> API_PROXY
 NGINX_HTTPS --> API_PROXY
-API_PROXY ==>|"/api/*"| MCP_API
-API_PROXY ==>|"/ws"| MCP_WS
-API_PROXY ==>|"/mcp/sse"| MCP_SSE
-API_PROXY ==>|"Telemetry"| HTTP
+API_PROXY ==>|"/mcp/"| MCP_API
+API_PROXY ==>|"/mcp/ws"| MCP_WS
+API_PROXY ==>|"/telemetry/ → PNG"| HTTP
 
 NGINX_HTTP --> STATIC_SERVER
 NGINX_HTTPS --> STATIC_SERVER
