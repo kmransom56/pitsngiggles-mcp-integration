@@ -82,22 +82,23 @@ services:
 
 endpoints:
   - name: Chat API
-    url: http://localhost/api/chat
+    url: http://localhost:8765/mcp/chat
     method: POST
-    description: Send chat messages with telemetry context
+    description: Docker mcp_server chat (or https://localhost:9443/mcp/chat via nginx)
     
   - name: WebSocket
-    url: ws://localhost/api/ws
-    description: Real-time communication
+    url: ws://localhost:8765/mcp/ws
+    description: Real-time communication (wss://localhost:9443/mcp/ws via nginx)
     
-  - name: MCP SSE
-    url: http://localhost/mcp/sse
-    description: Server-Sent Events for AI clients (ChatGPT, Claude)
+  - name: PNG MCP SSE (via nginx)
+    url: https://localhost:9443/telemetry/mcp
+    method: GET
+    description: SSE from Pits N Giggles GET /mcp — not implemented on mcp_server
     
   - name: Health Check
-    url: http://localhost/health
+    url: http://localhost:8765/health
     method: GET
-    description: Check server status
+    description: mcp_server status (https://localhost:9443/health via nginx)
 
 environment:
   required:
@@ -115,12 +116,12 @@ environment:
       default: openai/gpt-4o-mini
       
     - name: HTTP_PORT
-      description: HTTP port
-      default: 80
+      description: Published HTTP port (host)
+      default: 9080
       
     - name: HTTPS_PORT
-      description: HTTPS port
-      default: 443
+      description: Published HTTPS port (host)
+      default: 9443
       
     - name: MCP_PORT
       description: MCP server port
@@ -138,10 +139,10 @@ networks:
     description: Internal network for F1 services
 
 ports:
-  - port: 80
-    description: HTTP traffic
+  - port: 9080
+    description: HTTP traffic (maps to container 80; redirects to HTTPS)
     
-  - port: 443
+  - port: 9443
     description: HTTPS traffic (with self-signed cert)
     
   - port: 8765
@@ -152,7 +153,7 @@ quickstart: |
   2. Copy .env.mcp.example to .env.mcp and add your API key
   3. Run: ./start-mcp.sh
   4. Start Pits N Giggles: ./start.sh
-  5. Access: http://localhost/strategy-center.html
+  5. Access: https://localhost:9443/ (trust dev cert)
   
   For detailed instructions: https://github.com/kmransom56/pitsngiggles-mcp-integration/blob/main/docs/mcp/MCP_QUICKSTART.md
 
@@ -160,7 +161,7 @@ usage_examples:
   - title: Basic Chat Request
     language: bash
     code: |
-      curl -X POST http://localhost/api/chat \
+      curl -X POST http://localhost:8765/mcp/chat \
         -H "Content-Type: application/json" \
         -d '{
           "message": "I have understeer in slow corners",
@@ -175,7 +176,7 @@ usage_examples:
   - title: WebSocket Connection
     language: javascript
     code: |
-      const ws = new WebSocket('ws://localhost/api/ws');
+      const ws = new WebSocket('ws://localhost:8765/mcp/ws');
       
       ws.onopen = () => {
         ws.send(JSON.stringify({
@@ -196,7 +197,7 @@ usage_examples:
       {
         "mcpServers": {
           "f1-race-engineer": {
-            "url": "http://localhost/mcp/sse",
+            "url": "https://localhost:9443/telemetry/mcp",
             "description": "F1 Race Engineering AI"
           }
         }
@@ -372,10 +373,10 @@ Optional:
 
 ## Endpoints
 
-- Chat API: `POST /api/chat`
-- WebSocket: `ws://localhost/api/ws`
-- MCP SSE: `GET /mcp/sse`
-- Health: `GET /health`
+- Chat API: `POST /mcp/chat` on `:8765` or via nginx `https://localhost:9443/mcp/chat`
+- WebSocket: `ws://localhost:8765/mcp/ws` / `wss://localhost:9443/mcp/ws`
+- SSE: PNG only — `GET https://localhost:9443/telemetry/mcp` (not on `mcp_server`)
+- Health: `GET /health` on `:8765` or `https://localhost:9443/health`
 
 ## AI Client Integration
 

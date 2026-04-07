@@ -80,7 +80,7 @@ Add to ChatGPT config:
   "mcpServers": {
     "f1-race-engineer": {
       "command": "npx",
-      "args": ["-y", "sse-mcp-client", "http://localhost:80/mcp/sse"]
+      "args": ["-y", "sse-mcp-client", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
@@ -96,7 +96,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost:80/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "transport": "sse"
     }
   }

@@ -145,11 +145,13 @@ localStorage.setItem('ai_mode', 'mcp');
 
 ### MCP Endpoints
 
-The MCP server exposes these endpoints:
+**Pits N’ Giggles** (host `:4768`, telemetry web server) exposes:
 
 - **Chat API:** `POST /api/chat` - Intelligent race engineer chat
 - **MCP Tools:** `POST /mcp/tools` - Raw MCP tool invocation
 - **SSE Stream:** `GET /mcp` - Server-Sent Events for AI clients
+
+**Docker `mcp_server`** (`mcp_server/server.py`, direct `http://localhost:8765`) is different: **`POST /mcp/chat`**, **`WebSocket /mcp/ws`**, and **no SSE**. Do not point SSE clients at `mcp_server`; use PNG’s `GET /mcp`, e.g. via nginx `https://localhost:9443/telemetry/mcp`. See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
 
 ### Connect External AI Clients
 

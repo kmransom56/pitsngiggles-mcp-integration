@@ -4,7 +4,7 @@ Configure ChatGPT, Claude, Cursor, and other AI clients to access the F1 Race En
 
 ## Overview
 
-The MCP (Model Context Protocol) allows AI clients to connect to external tools and data sources. By connecting to the F1 Race Engineer MCP server, AI clients can access live F1 telemetry and provide race engineering advice.
+The MCP (Model Context Protocol) allows AI clients to connect to external tools and data sources. **Server-Sent Events** for MCP-style streaming come from **Pits N’ Giggles on the host** (`GET /mcp` on port **4768**), normally reached through nginx as **`https://<host>:9443/telemetry/mcp`** (strip prefix). The **Docker `mcp_server`** container exposes **HTTP `POST /mcp/chat`** and **`WebSocket /mcp/ws`** on **`http://localhost:8765`** — it does **not** implement SSE. See [DOCKER_DEPLOYMENT.md](../DOCKER_DEPLOYMENT.md).
 
 ## Supported AI Clients
 
@@ -32,7 +32,7 @@ Edit `~/Library/Application Support/ChatGPT/config.json`:
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "description": "F1 Race Engineering with live telemetry",
       "capabilities": ["chat", "telemetry", "analysis"]
     }
@@ -48,7 +48,7 @@ Edit `%APPDATA%\ChatGPT\config.json`:
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "description": "F1 Race Engineering with live telemetry"
     }
   }
@@ -113,7 +113,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "args": [
         "-N",
         "-H", "Accept: text/event-stream",
-        "http://localhost/mcp/sse"
+        "https://localhost:9443/telemetry/mcp"
       ]
     }
   }
@@ -132,7 +132,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
       "args": [
         "-N",
         "-H", "Accept: text/event-stream",
-        "http://localhost/mcp/sse"
+        "https://localhost:9443/telemetry/mcp"
       ]
     }
   }
@@ -193,7 +193,7 @@ When discussing F1 telemetry, car setup, or race strategy, use the
 f1-race-engineer MCP server to access live data.
 
 ## MCP Server
-Endpoint: http://localhost/mcp/sse
+Endpoint: https://localhost:9443/telemetry/mcp
 Description: Live F1 telemetry and race engineering AI
 
 ## Usage Guidelines
@@ -225,7 +225,7 @@ Add to Cursor settings (`.cursor/settings.json`):
 {
   "mcp.servers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "enabled": true
     }
   }
@@ -255,7 +255,7 @@ Edit Continue config (`~/.continue/config.json`):
   "mcpServers": [
     {
       "name": "f1-race-engineer",
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "description": "F1 telemetry and race engineering"
     }
   ],
@@ -284,7 +284,7 @@ Add to VS Code settings (`.vscode/settings.json`):
 {
   "cline.mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "autoConnect": true
     }
   },
@@ -299,7 +299,7 @@ For any MCP-compatible client:
 ```json
 {
   "server": {
-    "url": "http://localhost/mcp/sse",
+    "url": "https://localhost:9443/telemetry/mcp",
     "protocol": "sse",
     "capabilities": [
       "tools/call",
@@ -328,7 +328,7 @@ Once connected, AI clients can call these tools:
 
 ```bash
 # Test SSE connection
-curl -N -H "Accept: text/event-stream" http://localhost/mcp/sse
+curl -N -H "Accept: text/event-stream" https://localhost:9443/telemetry/mcp
 
 # Should output:
 # data: {"type":"ping","timestamp":"..."}
@@ -393,7 +393,7 @@ Claude: [Fetches data via MCP]
 curl http://localhost/health
 
 # Check SSE endpoint
-curl -N http://localhost/mcp/sse
+curl -N https://localhost:9443/telemetry/mcp
 
 # Restart MCP server
 ./stop-mcp.sh && ./start-mcp.sh

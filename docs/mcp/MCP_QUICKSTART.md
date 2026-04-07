@@ -87,10 +87,11 @@ Try asking:
 | Service | URL | Description |
 |---------|-----|-------------|
 | Pits N Giggles | http://localhost:4768 | Main telemetry server |
-| Strategy Center | http://localhost/strategy-center.html | AI race engineer UI |
-| MCP Chat API | http://localhost/api/chat | Chat endpoint |
-| MCP Server | http://localhost:8765 | Direct MCP access |
-| Health Check | http://localhost/health | Server status |
+| Strategy Center | https://localhost:9443/ | AI race engineer UI (nginx static) |
+| MCP Chat API | POST https://localhost:9443/mcp/chat | Docker `mcp_server` (or `:8765` direct) |
+| MCP WebSocket | wss://localhost:9443/mcp/ws | Real-time chat |
+| SSE (PNG MCP stream) | GET https://localhost:9443/telemetry/mcp | PNG `GET /mcp` via `/telemetry/` prefix |
+| Health (MCP) | https://localhost:9443/health | `mcp_server` health via nginx |
 
 ## AI Client Integration
 
@@ -102,7 +103,7 @@ Add to MCP settings (`~/Library/Application Support/ChatGPT/config.json`):
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse"
+      "url": "https://localhost:9443/telemetry/mcp"
     }
   }
 }
@@ -116,7 +117,7 @@ Add to config (`~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse"
+      "url": "https://localhost:9443/telemetry/mcp"
     }
   }
 }
@@ -128,7 +129,7 @@ Add to `.cursorrules` in your project:
 
 ```
 Use the f1-race-engineer MCP server for F1 telemetry analysis.
-Endpoint: http://localhost/mcp/sse
+SSE endpoint (PNG via nginx): https://localhost:9443/telemetry/mcp. HTTP chat: POST https://localhost:9443/mcp/chat
 ```
 
 ## Switching AI Modes

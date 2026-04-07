@@ -130,7 +130,8 @@ Create `mcp-toolkit.json`:
   "capabilities": {
     "mcp": {
       "protocol": "sse",
-      "endpoint": "/mcp/sse",
+      "endpoint": "/telemetry/mcp",
+      "endpoint_note": "SSE is served by Pits N Giggles at GET /mcp on host :4768; nginx maps https://host:9443/telemetry/ to PNG. Docker mcp_server uses HTTP+WS only (POST /mcp/chat, WS /mcp/ws on :8765).",
       "tools": [
         {
           "name": "get_telemetry_data",

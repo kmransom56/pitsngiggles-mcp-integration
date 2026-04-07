@@ -10,9 +10,10 @@ nano .env.mcp  # Add LLM_API_KEY
 # 2. Start
 ./start-mcp.sh
 
-# 3. Access
-http://localhost/strategy-center.html
+# 3. Access (nginx HTTPS default host port 9443)
+https://localhost:9443/
 ```
+(Trust or `-k` self-signed cert in dev.)
 
 ## 🔑 Get API Key
 
@@ -23,12 +24,20 @@ http://localhost/strategy-center.html
 
 ## 📡 Endpoints
 
-| Endpoint | Purpose | Method |
-|----------|---------|--------|
-| `/api/chat` | Chat with AI | POST |
-| `/api/ws` | WebSocket | WS |
-| `/mcp/sse` | AI clients | GET |
-| `/health` | Status | GET |
+**Docker `mcp_server` (HTTP + WebSocket only — no SSE):**
+
+| Path | Purpose | Method |
+|------|---------|--------|
+| `http://localhost:8765/mcp/chat` | Chat | POST |
+| `ws://localhost:8765/mcp/ws` | WebSocket | WS |
+| `http://localhost:8765/health` | Status | GET |
+
+**Via nginx** (`HTTPS_PORT` default **9443**): `https://localhost:9443/mcp/chat`, `wss://localhost:9443/mcp/ws`, `https://localhost:9443/health`.
+
+**PNG on host `:4768`** (SSE for MCP-style streams): `GET http://localhost:4768/mcp`  
+**Through nginx telemetry prefix:** `GET https://localhost:9443/telemetry/mcp`
+
+There is **no** `/mcp/sse` on either stack.
 
 ## 🎯 Example Questions
 
@@ -42,30 +51,29 @@ http://localhost/strategy-center.html
 
 ## 🤖 AI Client Config
 
-### ChatGPT Desktop
+### ChatGPT Desktop (SSE → PNG through nginx)
 ```json
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse"
+      "command": "npx",
+      "args": ["-y", "sse-mcp-client", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
 ```
-File: `~/Library/Application Support/ChatGPT/config.json`
 
 ### Claude Desktop
 ```json
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "command": "curl",
-      "args": ["-N", "-H", "Accept: text/event-stream", "http://localhost/mcp/sse"]
+      "url": "https://localhost:9443/telemetry/mcp",
+      "transport": "sse"
     }
   }
 }
 ```
-File: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ## 🔧 Commands
 
@@ -77,20 +85,20 @@ File: `~/Library/Application Support/Claude/claude_desktop_config.json`
 ./stop-mcp.sh
 
 # Logs
-docker-compose -f docker-compose.mcp.yml logs -f
+docker compose -f docker-compose.mcp.yml logs -f
 
 # Restart
 ./stop-mcp.sh && ./start-mcp.sh
 
 # Status
-curl http://localhost/health
+curl -sk https://localhost:9443/health
 ```
 
 ## 🐛 Troubleshooting
 
 ### MCP Not Responding
 ```bash
-docker-compose -f docker-compose.mcp.yml logs -f mcp-server
+docker compose -f docker-compose.mcp.yml logs -f mcp-server
 ```
 
 ### No AI Responses
@@ -178,26 +186,24 @@ switchAIMode("openai")
 LLM_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
 LLM_API_KEY=sk-or-v1-YOUR_KEY_HERE
 LLM_MODEL=openai/gpt-4o-mini
-HTTP_PORT=80
-HTTPS_PORT=443
+HTTP_PORT=9080
+HTTPS_PORT=9443
 MCP_PORT=8765
 ```
 
 ## 🧪 Test Connection
 
 ```bash
-# Health check
-curl http://localhost/health
+curl -sk https://localhost:9443/health
 
-# Test chat
-curl -X POST http://localhost/api/chat \
+curl -sk -X POST https://localhost:9443/mcp/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is my lap time?"}'
 ```
 
 ## 📞 Support
 
-- Check logs first: `docker-compose -f docker-compose.mcp.yml logs -f`
+- Check logs first: `docker compose -f docker-compose.mcp.yml logs -f`
 - GitHub Issues for bugs
 - Documentation in `docs/mcp/`
 - Quick Start guide for common issues

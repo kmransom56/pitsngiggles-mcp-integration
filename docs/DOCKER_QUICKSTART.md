@@ -109,7 +109,7 @@ Telemetry should start flowing immediately!
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "name": "F1 Race Engineer",
       "description": "Live F1 telemetry analysis and race engineering"
     }
@@ -128,7 +128,7 @@ Telemetry should start flowing immediately!
   "mcpServers": {
     "f1-race-engineer": {
       "command": "curl",
-      "args": ["-N", "http://localhost/mcp/sse"]
+      "args": ["-N", "-k", "-H", "Accept: text/event-stream", "https://localhost:9443/telemetry/mcp"]
     }
   }
 }
@@ -140,7 +140,7 @@ Telemetry should start flowing immediately!
 
 ```
 Name: F1 Race Engineer
-URL: http://localhost/mcp/sse
+URL (SSE via PNG): https://localhost:9443/telemetry/mcp
 ```
 
 ---
@@ -153,7 +153,7 @@ URL: http://localhost/mcp/sse
 F1 Game (UDP) → Pits N Giggles (host:4768) → Docker Services
                                                    ↓
                                         ┌──────────────────┐
-                                        │  Nginx (80/443)  │
+                                        │ Nginx (:9080/:9443)│
                                         └────────┬─────────┘
                                                  │
                          ┌───────────────────────┼───────────────────┐
@@ -172,7 +172,7 @@ F1 Game (UDP) → Pits N Giggles (host:4768) → Docker Services
    - Processes and computes race data
    - Exposes REST API and Socket.IO
 
-2. **Nginx Reverse Proxy** (Docker, port 80/443)
+2. **Nginx Reverse Proxy** (Docker; host **9080**→80, **9443**→443 by default)
    - Routes requests to appropriate services
    - Handles SSL/TLS
    - Serves frontend HTML pages
@@ -537,41 +537,38 @@ docker-compose -f docker-compose.mcp.yml restart nginx
 
 ## API Reference
 
-### MCP Endpoints
+### MCP Endpoints (`mcp_server`: HTTP + WebSocket; no SSE)
 
 ```bash
-# Chat API (JSON)
-POST http://localhost/api/chat
+# Direct MCP (no nginx)
+POST http://localhost:8765/mcp/chat
 Content-Type: application/json
+{"message": "I have understeer in slow corners", "telemetry": null}
 
-{
-  "message": "I have understeer in slow corners",
-  "telemetry": { ... }
-}
+ws://localhost:8765/mcp/ws
+GET http://localhost:8765/health
 
-# WebSocket
-ws://localhost/api/ws
-
-# MCP SSE (for AI clients)
-GET http://localhost/mcp/sse
-
-# Health Check
-GET http://localhost/health
+# Via nginx HTTPS (self-signed: use -k)
+POST https://localhost:9443/mcp/chat
+wss://localhost:9443/mcp/ws
+GET https://localhost:9443/health
 ```
 
-### Telemetry Endpoints (Proxied from Pits N Giggles)
+**SSE** is only on **PNG** (`GET /mcp` on **:4768**). Through nginx: **`GET https://localhost:9443/telemetry/mcp`**. There is no `/mcp/sse`.
+
+### Telemetry Endpoints (Proxied from Pits N Giggles under `/telemetry/`)
 
 ```bash
 # Live telemetry
-GET http://localhost/telemetry-info
+GET https://localhost:9443/telemetry/telemetry-info
 
 # Race info
-GET http://localhost/race-info
+GET https://localhost:9443/telemetry/race-info
 
 # Driver details
-GET http://localhost/driver-info?driver=0
+GET https://localhost:9443/telemetry/driver-info?driver=0
 
-# All endpoints from Pits N Giggles available via proxy
+# All endpoints from Pits N Giggles available via /telemetry/ prefix (-k for TLS)
 ```
 
 ---

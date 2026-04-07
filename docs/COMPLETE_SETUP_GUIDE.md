@@ -225,7 +225,7 @@ MCP_PORT=9000
 
 **Stop:**
 ```bash
-docker-compose -f docker-compose.mcp.yml down
+docker compose -f docker-compose.mcp.yml down
 ```
 
 ### Native Mode
@@ -263,7 +263,7 @@ docker-compose -f docker-compose.mcp.yml down
    {
      "mcpServers": {
        "f1-race-engineer": {
-         "url": "http://localhost/mcp/sse",
+         "url": "https://localhost:9443/telemetry/mcp",
          "name": "F1 Race Engineer",
          "description": "F1 23/24/25 telemetry analysis and setup advice"
        }
@@ -282,7 +282,7 @@ docker-compose -f docker-compose.mcp.yml down
    {
      "mcpServers": {
        "f1-race-engineer": {
-         "url": "http://localhost/mcp/sse",
+         "url": "https://localhost:9443/telemetry/mcp",
          "name": "F1 Race Engineer"
        }
      }
@@ -295,7 +295,7 @@ docker-compose -f docker-compose.mcp.yml down
 1. Open Cursor Settings
 2. Go to MCP Servers
 3. Add new server:
-   - URL: `http://localhost/mcp/sse`
+   - URL: `https://localhost:9443/telemetry/mcp` (SSE from PNG via `/telemetry/`; Docker `mcp_server` uses `POST /mcp/chat` on `:8765`, not SSE)
    - Name: F1 Race Engineer
 4. Save and reload
 
@@ -332,8 +332,8 @@ If telemetry isn't working:
 
 **Solutions:**
 1. Check Docker is running: `docker ps`
-2. Check port conflicts: `lsof -i :80` or `netstat -an | grep 80`
-3. Review logs: `docker-compose -f docker-compose.mcp.yml logs`
+2. Check port conflicts: `lsof -i :9080 -i :9443 -i :8765`
+3. Review logs: `docker compose -f docker-compose.mcp.yml logs`
 4. Try native mode: `./start.sh` and select "Native"
 
 ### Voice Not Working
@@ -352,10 +352,10 @@ If telemetry isn't working:
 **Symptom:** AI doesn't use telemetry data
 
 **Solutions:**
-1. Check MCP server is running: `curl http://localhost:80/health`
+1. Check MCP server is running: `curl -sk https://localhost:9443/health`
 2. Verify LLM API key in `.env.mcp`
 3. Check API key balance/quota
-4. Review MCP logs: `docker-compose -f docker-compose.mcp.yml logs mcp-server`
+4. Review MCP logs: `docker compose -f docker-compose.mcp.yml logs mcp-server`
 5. Try switching to `mcp_chat` mode
 
 ### No Telemetry Data
@@ -479,7 +479,7 @@ For production use:
 
 **Docker mode:**
 ```bash
-docker-compose -f docker-compose.mcp.yml logs -f
+docker compose -f docker-compose.mcp.yml logs -f
 ```
 
 **Native mode:**
@@ -495,7 +495,7 @@ tail -f backend.log
 curl http://localhost:4768/race-info
 
 # MCP Server (Docker)
-curl http://localhost:80/health
+curl -sk https://localhost:9443/health
 
 # MCP Server (Native)
 curl http://localhost:8765/health
@@ -528,14 +528,14 @@ Restart services to see detailed logs.
 ### Stopping
 ```bash
 ./stop.sh
-docker-compose -f docker-compose.mcp.yml down
+docker compose -f docker-compose.mcp.yml down
 ```
 
 ### URLs
 - Main UI: http://localhost:4768
 - Voice Strategy: http://localhost:4768/voice-strategy-center
-- MCP API: http://localhost/api/chat
-- MCP Health: http://localhost/health
+- Docker MCP chat: `POST https://localhost:9443/mcp/chat` or `POST http://localhost:8765/mcp/chat`
+- MCP health: `https://localhost:9443/health` (or `:8765/health` direct)
 
 ### Voice Controls
 - **Push-to-Talk**: Space key
