@@ -15,13 +15,13 @@ This guide covers the complete F1 Race Engineer AI Agent integration with Pits N
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │   F1 23/24/25   │      │  Pits N Giggles │      │   AI Clients    │
 │   Telemetry     │─────▶│   Backend       │◀─────│ (ChatGPT/Claude)│
-│  UDP :20777     │      │   :4768         │      │   via SSE       │
+│  UDP :20777     │      │   :4768         │      │ SSE via PNG /mcp│
 └─────────────────┘      └─────────────────┘      └─────────────────┘
                                 │                           │
                                 ▼                           ▼
                          ┌─────────────────────────────────────┐
                          │      Nginx Reverse Proxy           │
-                         │      :80 (HTTP) :443 (HTTPS)       │
+                         │   host :9080→80, :9443→443 (env)    │
                          └─────────────────────────────────────┘
                                 │                   │
                     ┌───────────┴─────┬─────────────┘
@@ -52,12 +52,8 @@ The script will:
 ### Option 2: Docker-Only Deployment
 
 ```bash
-# If Pits N Giggles is already running on host
-docker-compose -f docker-compose.mcp.yml up -d
-
-# To include Pits N Giggles in Docker
-# Edit docker-compose.mcp.yml and uncomment pits-n-giggles service
-docker-compose -f docker-compose.mcp.yml up -d
+# Stack is mcp-server + nginx only; run Pits N Giggles on the host (:4768)
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
 ```
 
 ### Option 3: Manual Setup
@@ -124,14 +120,23 @@ After starting services:
 - **Strategy Center** (Text): `http://localhost:4768/strategy-center`
 - **Voice Strategy Center**: `http://localhost:4768/voice-strategy-center`
 
-### MCP Server Endpoints
-- **HTTP API**: `http://localhost:80/api/chat`
-- **WebSocket**: `ws://localhost:80/api/ws`
-- **SSE (AI Clients)**: `http://localhost:80/mcp/sse`
-- **Health Check**: `http://localhost:80/health`
+### MCP (`mcp_server` container) — HTTP + WebSocket only (no SSE)
 
-If using Docker mode:
-- **HTTPS**: `https://localhost:443`
+Direct (bypass nginx): `http://localhost:8765`
+
+Via nginx (defaults `HTTP_PORT=9080`, `HTTPS_PORT=9443`; HTTP redirects to HTTPS):
+
+- **Chat**: `POST https://localhost:9443/mcp/chat` (use `-k` for dev self-signed TLS)
+- **WebSocket**: `wss://localhost:9443/mcp/ws`
+- **Health**: `GET https://localhost:9443/health`
+
+### SSE (PNG telemetry app on host `:4768`, not `mcp_server`)
+
+PNG serves **`GET /mcp`** as **Server-Sent Events**. Through nginx’s `/telemetry/` prefix that is:
+
+- **`GET https://localhost:9443/telemetry/mcp`** → proxied to PNG **`GET http://host:4768/mcp`**
+
+There is **no** `/mcp/sse` on either service. See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
 
 ## 🎙️ Voice Features
 
@@ -196,18 +201,18 @@ LLM_MODEL=anthropic/claude-3-5-sonnet
 ### Port Configuration
 
 ```bash
-HTTP_PORT=80          # nginx HTTP
-HTTPS_PORT=443        # nginx HTTPS
-MCP_PORT=8765         # MCP server
+HTTP_PORT=9080        # host → container 80 (redirects to HTTPS)
+HTTPS_PORT=9443       # host → container 443
+MCP_PORT=8765         # MCP server (direct)
 TELEMETRY_HOST=host.docker.internal  # Pits N Giggles host
 TELEMETRY_PORT=4768   # Pits N Giggles port
 ```
 
 ## 🤖 AI Client Integration
 
-### ChatGPT Desktop
+### ChatGPT Desktop (SSE → PNG via nginx)
 
-Add to ChatGPT configuration:
+The **Docker MCP app** (`mcp_server/server.py`) does **not** expose SSE. For MCP clients that require SSE, point them at **PNG’s** stream through the telemetry prefix:
 
 ```json
 {
@@ -217,34 +222,32 @@ Add to ChatGPT configuration:
       "args": [
         "-y",
         "sse-mcp-client",
-        "http://localhost:80/mcp/sse"
+        "https://localhost:9443/telemetry/mcp"
       ]
     }
   }
 }
 ```
 
-### Claude Desktop
+Use `-k` or trust the dev certificate if your client does not allow insecure TLS.
 
-Add to `claude_desktop_config.json`:
+### Claude Desktop (same SSE URL)
 
 ```json
 {
   "mcpServers": {
     "f1-race-engineer": {
-      "url": "http://localhost:80/mcp/sse",
+      "url": "https://localhost:9443/telemetry/mcp",
       "transport": "sse"
     }
   }
 }
 ```
 
-### Other AI Clients
+### HTTP chat against Docker MCP (no SSE)
 
-Any MCP-compatible client can connect via:
-- **SSE Endpoint**: `http://localhost:80/mcp/sse`
-- **WebSocket**: `ws://localhost:80/api/ws`
-- **HTTP REST**: `http://localhost:80/api/chat`
+- **REST**: `POST https://localhost:9443/mcp/chat` or `POST http://localhost:8765/mcp/chat`
+- **WebSocket**: `wss://localhost:9443/mcp/ws` or `ws://localhost:8765/mcp/ws`
 
 ## 🐳 Docker Deployment
 
@@ -255,7 +258,7 @@ Any MCP-compatible client can connect via:
 │         Docker Host                     │
 │  ┌──────────────┐   ┌──────────────┐  │
 │  │ MCP Server   │   │   Nginx      │  │
-│  │  :8765       │◀─▶│  :80, :443   │  │
+│  │  :8765       │◀─▶│ :9080,:9443  │  │
 │  └──────────────┘   └──────────────┘  │
 │         ▲                   ▲          │
 └─────────┼───────────────────┼──────────┘
@@ -277,7 +280,7 @@ Any MCP-compatible client can connect via:
 
 **Nginx Container**:
 - Image: Custom build from `Dockerfile.nginx`
-- Ports: 80 (HTTP), 443 (HTTPS)
+- Published ports: `${HTTP_PORT:-9080}:80`, `${HTTPS_PORT:-9443}:443`
 - Serves: Strategy Center UI, reverse proxy to MCP
 - Volumes: SSL certs, logs, static HTML
 
@@ -285,19 +288,19 @@ Any MCP-compatible client can connect via:
 
 ```bash
 # Start all services
-docker-compose -f docker-compose.mcp.yml up -d
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
 
 # View logs
-docker-compose -f docker-compose.mcp.yml logs -f
+docker compose -f docker-compose.mcp.yml logs -f
 
 # Stop services
-docker-compose -f docker-compose.mcp.yml down
+docker compose -f docker-compose.mcp.yml down
 
 # Rebuild after code changes
-docker-compose -f docker-compose.mcp.yml up -d --build
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d --build
 
-# Check health
-curl http://localhost:80/health
+# Check health (MCP via nginx HTTPS)
+curl -sk https://localhost:9443/health
 ```
 
 ## 🔒 SSL/TLS Configuration
@@ -328,7 +331,7 @@ cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ssl/cert.pem
 cp /etc/letsencrypt/live/your-domain.com/privkey.pem ssl/key.pem
 
 # Restart nginx
-docker-compose -f docker-compose.mcp.yml restart nginx
+docker compose -f docker-compose.mcp.yml restart nginx
 ```
 
 ## 📊 Agent Response Capabilities
@@ -385,8 +388,8 @@ curl http://localhost:4768/health
 ### 2. Test MCP Server
 
 ```bash
-curl http://localhost:80/health
-# Expected: {"status": "healthy"}
+curl -sk https://localhost:9443/health
+# Expected: healthy JSON from mcp-server
 ```
 
 ### 3. Test Strategy Center
@@ -412,7 +415,7 @@ Should receive AI-generated response with telemetry analysis.
 
 ```bash
 # Check logs
-docker-compose -f docker-compose.mcp.yml logs mcp-server
+docker compose -f docker-compose.mcp.yml logs mcp-server
 
 # Verify port availability
 lsof -i :8765
@@ -432,20 +435,20 @@ cat .env.mcp
 
 1. **Check LLM_API_KEY** in `.env.mcp`
 2. **Verify API endpoint**: Test with curl
-3. **Check logs**: `docker-compose -f docker-compose.mcp.yml logs`
+3. **Check logs**: `docker compose -f docker-compose.mcp.yml logs`
 4. **Fallback mode**: Agent works without API key (limited responses)
 
 ### nginx Connection Issues
 
 ```bash
 # Check nginx status
-docker-compose -f docker-compose.mcp.yml ps nginx
-
+docker compose -f docker-compose.mcp.yml ps nginx
+S
 # View nginx logs
-docker-compose -f docker-compose.mcp.yml logs nginx
+docker compose -f docker-compose.mcp.yml logs nginx
 
 # Test configuration
-docker-compose -f docker-compose.mcp.yml exec nginx nginx -t
+docker compose -f docker-compose.mcp.yml exec nginx nginx -t
 ```
 
 ## 📚 Additional Documentation

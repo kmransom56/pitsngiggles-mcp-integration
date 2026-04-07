@@ -1,6 +1,40 @@
 # Docker Deployment Guide
 
-## Quick Start
+## MCP + nginx only (`docker-compose.mcp.yml`)
+
+The recommended **AI reverse-proxy stack** is **`docker-compose.mcp.yml`**: it runs **only** `mcp-server` and `nginx`. **Pits N Giggles stays on the host** at **`http://localhost:4768`** (UDP ingest + main UI). Nginx maps:
+
+| Path on nginx | Goes to |
+|---------------|---------|
+| `/` | Static Strategy Center (`apps/frontend/html`) |
+| `/telemetry/` | PNG on host (`host.docker.internal:4768/`) — e.g. `/telemetry/mcp` → PNG’s SSE MCP |
+| `/mcp/` | Docker **`mcp_server`** (`mcp_server/server.py`) on port 8765 |
+| `/health` | MCP **`GET /health`** |
+
+**Published ports (compose defaults):** `9080→80` (HTTP redirect to HTTPS), `9443→443` (HTTPS), **`8765`** (direct MCP, bypass nginx). Override with `HTTP_PORT` / `HTTPS_PORT` in `.env.mcp` (example file uses `80`/`443`).
+
+**`mcp_server` transport (FastAPI):** **`POST /mcp/chat`**, **`WebSocket /mcp/ws`**, **`GET /mcp/telemetry/history`**, **`POST /mcp/analyze`**. There is **no** `/mcp/sse` in this container — see [MCP surfaces](#mcp-sse-vs-docker-mcp_server) below.
+
+```bash
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
+```
+
+Direct MCP (no nginx): `http://localhost:8765/health`, `POST http://localhost:8765/mcp/chat`.
+
+---
+
+## MCP: SSE vs Docker `mcp_server`
+
+| Surface | Where | SSE `GET …/mcp` | Docker FastAPI `/mcp/chat` + `/mcp/ws` |
+|---------|--------|-----------------|----------------------------------------|
+| **PNG embedded MCP** | Host `:4768` | Yes — `http://localhost:4768/mcp` | PNG routes: `POST /api/chat`, tools under `/mcp/tools` |
+| **Via nginx + Docker MCP only** | `https://localhost:<HTTPS_PORT>` | Use **`/telemetry/mcp`** (proxied to PNG) | Use **`/mcp/chat`** and **`/mcp/ws`** (FastAPI in container) |
+
+Docs that mention **`/mcp/sse`** were **out of date**: neither PNG nor `mcp_server` exposes that path.
+
+---
+
+## Quick Start (repo `./start.sh`)
 
 ```bash
 ./start.sh
@@ -17,14 +51,14 @@ That's it! The script will:
 ### Services
 
 1. **f1-race-engineer-mcp** (Port 8765)
-   - FastAPI MCP server
+   - FastAPI MCP server (`mcp_server/server.py`)
    - F1 Race Engineer AI agent
-   - WebSocket and HTTP APIs
+   - HTTP **`/mcp/chat`** and WebSocket **`/mcp/ws`** (not SSE)
 
-2. **f1-nginx-proxy** (Ports 80, 443)
+2. **f1-nginx-proxy** (host ports from env, defaults **9080** / **9443**)
    - Nginx reverse proxy
    - Serves Strategy Center UI
-   - Proxies to MCP server and Pits N Giggles
+   - Proxies **`/mcp/*`** to MCP and **`/telemetry/*`** to host PNG `:4768`
 
 ### Networks
 
@@ -65,19 +99,19 @@ location /telemetry/ {
 
 Then restart:
 ```bash
-docker-compose restart nginx
+docker compose -f docker-compose.mcp.yml restart nginx
 ```
 
 ### Custom Ports
 
-Edit `docker-compose.yml`:
+Edit **`docker-compose.mcp.yml`** (or set `HTTP_PORT` / `HTTPS_PORT` in `.env.mcp`):
 
 ```yaml
 services:
   nginx:
     ports:
-      - "8080:80"    # HTTP
-      - "8443:443"   # HTTPS
+      - "${HTTP_PORT:-9080}:80"
+      - "${HTTPS_PORT:-9443}:443"
 ```
 
 ## Commands
@@ -86,61 +120,55 @@ services:
 
 ```bash
 ./start.sh
-# Or manually:
-docker-compose up -d
+# MCP + nginx only:
+docker compose -f docker-compose.mcp.yml --env-file .env.mcp up -d
 ```
 
 ### Stop Services
 
 ```bash
 ./stop.sh
-# Or manually:
-docker-compose down
+# Or MCP stack:
+docker compose -f docker-compose.mcp.yml down
 ```
 
 ### View Logs
 
 ```bash
 # All services
-docker-compose logs -f
+docker compose -f docker-compose.mcp.yml logs -f
 
 # Specific service
-docker-compose logs -f mcp-server
-docker-compose logs -f nginx
+docker compose -f docker-compose.mcp.yml logs -f mcp-server
+docker compose -f docker-compose.mcp.yml logs -f nginx
 
 # Last 100 lines
-docker-compose logs --tail=100 mcp-server
+docker compose -f docker-compose.mcp.yml logs --tail=100 mcp-server
 ```
 
 ### Restart Services
 
 ```bash
 # All
-docker-compose restart
+docker compose -f docker-compose.mcp.yml restart
 
 # Specific
-docker-compose restart mcp-server
-docker-compose restart nginx
+docker compose -f docker-compose.mcp.yml restart mcp-server
+docker compose -f docker-compose.mcp.yml restart nginx
 ```
 
 ### Rebuild Services
 
 ```bash
-# After code changes
-docker-compose up -d --build
-
-# Specific service
-docker-compose up -d --build mcp-server
+docker compose -f docker-compose.mcp.yml up -d --build
+docker compose -f docker-compose.mcp.yml up -d --build mcp-server
 ```
 
 ### Enter Container Shell
 
 ```bash
-# MCP server
-docker-compose exec mcp-server /bin/bash
-
-# Nginx
-docker-compose exec nginx /bin/sh
+docker compose -f docker-compose.mcp.yml exec mcp-server /bin/bash
+docker compose -f docker-compose.mcp.yml exec nginx /bin/sh
 ```
 
 ## Health Checks
@@ -148,23 +176,23 @@ docker-compose exec nginx /bin/sh
 ### Check Service Status
 
 ```bash
-docker-compose ps
+docker compose -f docker-compose.mcp.yml ps
 ```
 
 ### Test MCP Server
 
 ```bash
-# Direct
+# Direct (bypass nginx)
 curl http://localhost:8765/health
 
-# Via nginx
-curl https://localhost/health -k
+# Via nginx HTTPS (use your HTTPS_PORT, default 9443)
+curl https://localhost:9443/health -k
 ```
 
 ### Test API
 
 ```bash
-curl -X POST https://localhost/mcp/chat \
+curl -X POST https://localhost:9443/mcp/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What setup changes reduce understeer?"}' \
   -k
@@ -177,20 +205,18 @@ curl -X POST https://localhost/mcp/chat \
 ```bash
 # Find process using port
 lsof -i :8765
-lsof -i :80
-lsof -i :443
+lsof -i :9080
+lsof -i :9443
 
-# Change ports in docker-compose.yml
+# Change ports in docker-compose.mcp.yml or .env.mcp
 ```
 
 ### Can't Connect to Pits N Giggles
 
 ```bash
-# Check Pits N Giggles is running
 curl http://localhost:4768/
 
-# Test from inside nginx container
-docker-compose exec nginx curl http://host.docker.internal:4768/
+docker compose -f docker-compose.mcp.yml exec nginx curl -sS http://host.docker.internal:4768/ | head
 ```
 
 ### SSL Certificate Warnings
@@ -199,32 +225,22 @@ Normal for development with self-signed certs. In browser:
 1. Click "Advanced"
 2. Click "Proceed to localhost (unsafe)"
 
-Or use HTTP: `http://localhost`
+Nginx still redirects port **80** inside the container to HTTPS; on the host you typically hit **`https://localhost:9443`** (default).
 
 ### Container Won't Start
 
 ```bash
-# Check logs
-docker-compose logs mcp-server
-
-# Remove and recreate
-docker-compose down
-docker-compose up -d
-
-# Force rebuild
-docker-compose up -d --build --force-recreate
+docker compose -f docker-compose.mcp.yml logs mcp-server
+docker compose -f docker-compose.mcp.yml down
+docker compose -f docker-compose.mcp.yml up -d
+docker compose -f docker-compose.mcp.yml up -d --build --force-recreate
 ```
 
 ### Clean Everything
 
 ```bash
-# Stop and remove containers, networks, volumes
-docker-compose down -v
-
-# Remove images too
-docker-compose down -v --rmi all
-
-# Start fresh
+docker compose -f docker-compose.mcp.yml down -v
+docker compose -f docker-compose.mcp.yml down -v --rmi all
 ./start.sh
 ```
 
@@ -248,7 +264,7 @@ ssl_certificate_key /etc/nginx/ssl/privkey.pem;
 
 4. Restart nginx:
 ```bash
-docker-compose restart nginx
+docker compose -f docker-compose.mcp.yml restart nginx
 ```
 
 ### Secure Configuration
@@ -274,23 +290,15 @@ echo ".env" >> .gitignore
 
 ### Scaling
 
-```bash
-# Run multiple MCP server instances
-docker-compose up -d --scale mcp-server=3
-
-# Nginx will load balance automatically
-```
+The bundled `nginx/conf.d/default.conf` uses a **single** `proxy_pass` to `mcp-server:8765`. Scaling MCP replicas requires an **upstream** block and load-balancing edits; it is not enabled out of the box.
 
 ## Updates
 
 ### Update Images
 
 ```bash
-# Pull latest code
 git pull origin main
-
-# Rebuild and restart
-docker-compose up -d --build
+docker compose -f docker-compose.mcp.yml up -d --build
 ```
 
 ### Backup Data
