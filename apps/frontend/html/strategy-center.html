@@ -670,33 +670,41 @@
         // Call MCP Chat API with telemetry context
         async function callMCPChatAPI(question) {
             try {
-                // Get current telemetry data
-                let telemetryData = null;
-                try {
-                    const telemetryResponse = await fetch('/telemetry-info');
-                    if (telemetryResponse.ok) {
-                        const data = await telemetryResponse.json();
-                        
-                        // Extract relevant telemetry fields
-                        telemetryData = {
-                            lap: data.lap || null,
-                            sector: data.sector || null,
-                            speed: data.speed || null,
-                            throttle: data.throttle || null,
-                            brake: data.brake || null,
-                            steering: data.steering || null,
-                            tyre_temps: data.tyre_temps || null,
-                            tyre_wear: data.tyre_wear || null,
-                            fuel: data.fuel_remaining_laps || null,
-                            position: data.position || null,
-                            session_type: data.session_type || null,
-                            track_name: data.track_name || null,
-                            weather: data.weather || null
-                        };
+                async function fetchJsonOrNull(url) {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) return null;
+                        return await res.json();
+                    } catch (e) {
+                        return null;
                     }
-                } catch (e) {
-                    console.warn('Could not fetch telemetry:', e);
                 }
+
+                function getPlayerIndexFromPeriodic(periodic) {
+                    if (!periodic || !Array.isArray(periodic['table-entries'])) return null;
+                    const playerRow = periodic['table-entries'].find(
+                        (row) => row?.['driver-info']?.['is-player']
+                    );
+                    const idx = playerRow?.['driver-info']?.['index'];
+                    return Number.isInteger(idx) ? idx : null;
+                }
+
+                // Get current telemetry data (full periodic + optional player driver detail)
+                const periodic = await fetchJsonOrNull('/telemetry-info');
+                const playerIndex = getPlayerIndexFromPeriodic(periodic);
+                const playerDriver =
+                    Number.isInteger(playerIndex)
+                        ? await fetchJsonOrNull(`/driver-info?index=${playerIndex}`)
+                        : null;
+
+                const telemetryData =
+                    periodic || playerDriver
+                        ? {
+                              periodic: periodic,
+                              playerIndex: playerIndex,
+                              playerDriver: playerDriver,
+                          }
+                        : null;
 
                 // Call MCP chat endpoint
                 const response = await fetch(MCP_CHAT_ENDPOINT, {
