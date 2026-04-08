@@ -1,0 +1,11 @@
+---
+description: Prevent Cursor from looping on CLAUDE.md edits and doc-reconcile chatter
+alwaysApply: true
+---
+
+# CLAUDE.md — no loops
+
+- Do **not** read, edit, summarize, or propose changes to `CLAUDE.md` unless the user **explicitly** asks (e.g. “refresh project memory”, “update CLAUDE.md”, “fix CLAUDE.md”).
+- Do **not** open or close replies with “update CLAUDE.md”, “doc reconcile”, “Last doc-reconcile”, or paste long path lists from that file.
+- If `git status` shows `CLAUDE.md` modified, **ignore it** for chat purposes unless the user asked about that file.
+- The content already injected from `CLAUDE.md` is **background**; continue the user’s actual task without re-verifying or syncing that file.

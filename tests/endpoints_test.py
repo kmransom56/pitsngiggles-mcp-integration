@@ -5,8 +5,9 @@ from colorama import Fore, Style, init
 # Initialize colorama (autoreset ensures clean output)
 init(autoreset=True)
 
+
 def test_endpoints_with_session(hostname, port, endpoints_config):
-    base_url = f'http://{hostname}:{port}'
+    base_url = f"http://{hostname}:{port}"
     session = requests.Session()
     failed_results = []
 
@@ -14,28 +15,34 @@ def test_endpoints_with_session(hostname, port, endpoints_config):
     failed = 0
 
     for endpoint, allowed_statuses in endpoints_config.items():
-        url = f'{base_url}{endpoint}'
+        url = f"{base_url}{endpoint}"
         try:
             response = session.get(url)
             status = response.status_code
             if status in allowed_statuses:
                 passed += 1
             else:
-                failed_results.append((
-                    f"{Fore.RED}FAIL{Style.RESET_ALL}",
-                    endpoint,
-                    f"{Fore.RED}{status}{Style.RESET_ALL}",
-                    f"{Fore.GREEN}{allowed_statuses}{Style.RESET_ALL}"
-                ))
+                failed_results.append(
+                    (
+                        f"{Fore.RED}FAIL{Style.RESET_ALL}",
+                        endpoint,
+                        f"{Fore.RED}{status}{Style.RESET_ALL}",
+                        f"{Fore.GREEN}{allowed_statuses}{Style.RESET_ALL}",
+                    )
+                )
                 failed += 1
         except Exception as e:
-            print(f"{Fore.YELLOW}ERROR{Style.RESET_ALL}: {endpoint} raised exception {e}")
-            failed_results.append((
-                f"{Fore.YELLOW}ERROR{Style.RESET_ALL}",
-                endpoint,
-                f"{Fore.YELLOW}{str(e)}{Style.RESET_ALL}",
-                f"{Fore.GREEN}{allowed_statuses}{Style.RESET_ALL}"
-            ))
+            print(
+                f"{Fore.YELLOW}ERROR{Style.RESET_ALL}: {endpoint} raised exception {e}"
+            )
+            failed_results.append(
+                (
+                    f"{Fore.YELLOW}ERROR{Style.RESET_ALL}",
+                    endpoint,
+                    f"{Fore.YELLOW}{str(e)}{Style.RESET_ALL}",
+                    f"{Fore.GREEN}{allowed_statuses}{Style.RESET_ALL}",
+                )
+            )
             failed += 1
 
     print("\n" + "=" * 60)
@@ -46,13 +53,17 @@ def test_endpoints_with_session(hostname, port, endpoints_config):
 
     if failed_results:
         print(f"{Style.BRIGHT}Failures & Errors:{Style.RESET_ALL}")
-        print(tabulate(
-            failed_results,
-            headers=["Result", "Endpoint", "Status", "Expected"],
-            tablefmt="grid"
-        ))
+        print(
+            tabulate(
+                failed_results,
+                headers=["Result", "Endpoint", "Status", "Expected"],
+                tablefmt="grid",
+            )
+        )
     else:
-        print(f"{Fore.GREEN}All endpoints returned expected status codes.{Style.RESET_ALL}")
+        print(
+            f"{Fore.GREEN}All endpoints returned expected status codes.{Style.RESET_ALL}"
+        )
 
 
 # Define endpoint config: endpoint -> list of acceptable status codes
@@ -95,6 +106,8 @@ endpoints_config = {
     "/static/js/frontendUpdate.js": [200],
     "/static/js/app.js": [200],
     "/static/js/ai-drawer.js": [200],
+    "/static/js/ai-message-format.js": [200],
+    "/static/js/ai-message-format-boot.js": [200],
 }
 
 # Example hostname and port
