@@ -1,18 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Race Strategy Center | Antigravity AI</title>
-    <meta name="description" content="F1 23 Race Strategy Center - Live telemetry with AI-powered race engineering analysis">
-    <link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,100..900;1,100..900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="description"
+        content="F1 23/24/25 Race Strategy Center - Live telemetry with AI-powered race engineering analysis">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,100..900;1,100..900&family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --bg-color: #05070a;
             --panel-bg: rgba(12, 14, 18, 0.75);
-            --accent-primary: #00f2ff; /* Neon Cyan */
-            --accent-secondary: #ff00ff; /* Neon Magenta */
-            --accent-success: #39ff14; /* Neon Green */
+            --accent-primary: #00f2ff;
+            /* Neon Cyan */
+            --accent-secondary: #ff00ff;
+            /* Neon Magenta */
+            --accent-success: #39ff14;
+            /* Neon Green */
             --text-main: #e0e4e8;
             --text-muted: rgba(224, 228, 232, 0.5);
             --border-color: rgba(0, 242, 255, 0.2);
@@ -20,15 +27,22 @@
             --sidebar-width: 420px;
         }
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-        body, html {
+        body,
+        html {
             height: 100%;
             background-color: var(--bg-color);
             color: var(--text-main);
             font-family: 'Exo 2', sans-serif;
             overflow: hidden;
-            background-image: 
+            background-image:
                 radial-gradient(circle at 20% 30%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
                 radial-gradient(circle at 80% 70%, rgba(255, 0, 255, 0.05) 0%, transparent 40%);
         }
@@ -200,8 +214,13 @@
             animation: slideUp 0.3s ease-out;
         }
 
-        .message.ai { align-self: flex-start; }
-        .message.user { align-self: flex-end; }
+        .message.ai {
+            align-self: flex-start;
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
 
         .msg-header {
             display: flex;
@@ -213,10 +232,22 @@
             letter-spacing: 1px;
         }
 
-        .msg-header .name { font-weight: 700; }
-        .message.ai .name { color: var(--accent-primary); }
-        .message.user .name { color: var(--accent-secondary); }
-        .msg-header .time { color: var(--text-muted); font-weight: 400; }
+        .msg-header .name {
+            font-weight: 700;
+        }
+
+        .message.ai .name {
+            color: var(--accent-primary);
+        }
+
+        .message.user .name {
+            color: var(--accent-secondary);
+        }
+
+        .msg-header .time {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
 
         .msg-bubble {
             padding: 10px 14px;
@@ -338,16 +369,33 @@
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Scrollbar */
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 10px;
+        }
     </style>
 </head>
+
 <body>
     <div class="layout-container">
         <main class="telemetry-pane">
@@ -367,7 +415,9 @@
 
             <div class="mcp-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                    <span style="color: var(--accent-primary); font-weight: 700; letter-spacing: 1px; font-size: 0.6rem;">MCP: LIVE</span>
+                    <span
+                        style="color: var(--accent-primary); font-weight: 700; letter-spacing: 1px; font-size: 0.6rem;">MCP:
+                        LIVE</span>
                     <button class="copy-btn" id="copy-mcp-url">Copy URL</button>
                 </div>
                 <div class="mcp-url-row">
@@ -454,7 +504,7 @@
         function addMessage(text, type = 'user') {
             const now = new Date();
             const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-            
+
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
             msg.innerHTML = `
@@ -473,7 +523,7 @@
             if (!text) return;
             addMessage(text, 'user');
             chatInput.value = '';
-            
+
             setTimeout(() => {
                 const responses = [
                     "Analyzing telemetry... Suggesting +1 front wing for next stint.",
@@ -489,4 +539,5 @@
         chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
     </script>
 </body>
+
 </html>
