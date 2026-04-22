@@ -1,4 +1,4 @@
-# ═══════════════════════════════════════════════════════════
+﻿# ═══════════════════════════════════════════════════════════
 # 🏎️ Pits N' Giggles — Race Strategy Center Launcher
 # ═══════════════════════════════════════════════════════════
 # Starts the telemetry server, ensures Nginx proxy is running
@@ -6,15 +6,26 @@
 # ═══════════════════════════════════════════════════════════
 
 $ErrorActionPreference = "Continue"
-$PNGExe = "c:\pitsngiggles-mcp-integration\pits_n_giggles_3.2.1.exe"
-$StrategyURL = "https://mcp.netintegrate.net:8443/"
+if ($env:PNG_EXE) {
+    $PNGExe = $env:PNG_EXE
+} else {
+    $PNGExe = Join-Path $PSScriptRoot "pits_n_giggles_3.2.2.exe"
+}
+# Default matches root pitsngiggles-mcp.conf (server_name mcp.netintegrate.net).
+# If that host is not yours / not running, use deployment nginx (localhost) and set:
+#   $env:STRATEGY_CENTER_URL = 'https://localhost:8443/'
+if ($env:STRATEGY_CENTER_URL) {
+    $StrategyURL = $env:STRATEGY_CENTER_URL.TrimEnd("/") + "/"
+} else {
+    $StrategyURL = "https://mcp.netintegrate.net:8443/"
+}
 $TelemetryPort = 4768
 $NginxPort = 8443
 
 Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║   🏎️  Race Strategy Center Launcher     ║" -ForegroundColor Cyan
-Write-Host "  ║   Pits N' Giggles + Antigravity AI      ║" -ForegroundColor Cyan
+Write-Host "  ║   🏎️  Race Strategy Center Launcher      ║" -ForegroundColor Cyan
+Write-Host "  ║   Pits N' Giggles + Antigravity AI       ║" -ForegroundColor Cyan
 Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
@@ -24,7 +35,29 @@ if ($pngRunning) {
     Write-Host "  ✅ Pits N' Giggles is already running (PID: $($pngRunning.Id))" -ForegroundColor Green
 } else {
     Write-Host "  🚀 Starting Pits N' Giggles..." -ForegroundColor Yellow
-    Start-Process -FilePath $PNGExe -WorkingDirectory (Split-Path $PNGExe)
+    if (-not (Test-Path -LiteralPath $PNGExe)) {
+        Write-Host "  ❌ Executable not found: $PNGExe" -ForegroundColor Red
+        Write-Host "  Install or copy pits_n_giggles_3.2.2.exe next to this script, or set env var PNG_EXE to the full path." -ForegroundColor Yellow
+        exit 1
+    }
+    try {
+        Unblock-File -LiteralPath $PNGExe -ErrorAction SilentlyContinue
+    } catch {
+    }
+    try {
+        $workDir = Split-Path -Parent $PNGExe
+        if (-not $workDir) {
+            $workDir = $PSScriptRoot
+        }
+        $null = Start-Process -FilePath $PNGExe -WorkingDirectory $workDir -PassThru -ErrorAction Stop
+    } catch {
+        Write-Host "  ❌ Could not start Pits N' Giggles: $($_.Exception.Message)" -ForegroundColor Red
+        if ($_.Exception.Message -match "canceled|cancelled") {
+            Write-Host "  If you saw 'Windows protected your PC' (SmartScreen), click More info, then Run anyway, or:" -ForegroundColor Yellow
+            Write-Host "  Right-click the .exe → Properties → check Unblock → OK, then run this script again." -ForegroundColor Yellow
+        }
+        exit 1
+    }
     Write-Host "  ⏳ Waiting for telemetry server to start on port $TelemetryPort..." -ForegroundColor Yellow
     
     $attempts = 0

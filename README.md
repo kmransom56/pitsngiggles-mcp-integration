@@ -39,6 +39,27 @@ sudo mkdir -p /var/www/html
 sudo cp strategy_center.html /var/www/html/index.html
 ```
 
+## 🌐 DNS for `mcp.netintegrate.net`
+
+In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. Authoritative resolvers live on the LAN (for example **`192.168.0.252`** and **`192.168.0.253`**).
+
+### Internal DNS (typical for this repo)
+
+1. **Zone on your DNS servers:** define **`mcp.netintegrate.net`** as an **A** record to the **IPv4 LAN address** of the machine where Nginx listens on **80** and **8443**.
+2. **Clients must query those resolvers:** every PC, phone, or AI tool host that should open `https://mcp.netintegrate.net:8443/` needs **DHCP-provided DNS** = `192.168.0.252` / `192.168.0.253`, or a manual static DNS entry on that interface. If Windows still uses only your ISP’s DNS, **`mcp.netintegrate.net` will not resolve** (or will NXDOMAIN), and the browser cannot connect.
+3. **Trust your internal CA:** browsers and some MCP clients must **trust the certificate** used by Nginx (import your root CA from **ca.netintegrate.net** into the user or machine store, or accept the risk once in the browser).
+4. **TLS paths** on the Nginx host must match `pitsngiggles-mcp.conf` (`fullchain.pem` / `privkey.pem` under `mcp.netintegrate.net`). Wrong or missing files often produce **ERR_CONNECTION_RESET** or certificate warnings.
+5. **Firewall:** allow **TCP 80** and **TCP 8443** to Nginx on that host from other LAN clients (and from the same host for loopback tests).
+6. **Upstream** (`proxy_pass … :4768`): see comments in `pitsngiggles-mcp.conf`—fix **WSL2 → Windows** gateway IP when it changes, or use **`127.0.0.1`** if the telemetry app runs on the same Linux instance as Nginx.
+7. **Check:** from a client using your internal DNS: `nslookup mcp.netintegrate.net 192.168.0.252` then `curl -vkI https://mcp.netintegrate.net:8443/`.
+
+### If you ever publish the same name on the public internet
+
+Use your registrar’s DNS (or split-horizon) with an **A** record to a **routable** public IP, open the same ports on that edge, and use a publicly trusted chain (or pin your CA only on clients you control).
+
+`launch_race_center.ps1` defaults to `https://mcp.netintegrate.net:8443/`. For testing without internal DNS:  
+`$env:STRATEGY_CENTER_URL = 'https://localhost:8443/'` (and use an nginx `server_name` that matches, e.g. `deployment/nginx/…`).
+
 ## 🏎️ MCP + Pits n' Giggles (same running app)
 
 The desktop app must expose **HTTP + MCP on port 4768** (ensure **Enable MCP HTTP Server** is checked in the app's **MCP Settings**). Nginx then exposes:
