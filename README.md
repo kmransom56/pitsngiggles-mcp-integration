@@ -71,8 +71,14 @@ In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. A
 4. **Try Google Chrome** on the same PC. If Chrome works and Edge does not, keep QUIC disabled or reset Edge (Settings → Reset settings).
 5. **Narrow TLS:** on the Nginx host, temporarily set `ssl_protocols TLSv1.2;` (TLS 1.2 only), `nginx -t && reload`, test Edge again. If that fixes it, note your OpenSSL/nginx build and consider a TLS 1.3 cipher profile update; then restore `TLSv1.2 TLSv1.3` once fixed upstream.
 6. **Third‑party HTTPS inspection** (some antivirus): pause web/HTTPS scanning for a quick test; these tools often break Edge before they break `curl`.
+7. **WinHTTP / system proxy:** run `netsh winhttp show proxy`. If traffic is sent to a corporate proxy, Edge can RST while `curl` does not (curl often bypasses WinHTTP). Clear the proxy for testing, or add a bypass for `192.168.0.0/16` and internal hostnames.
+8. **HSTS cache:** in Edge open `edge://net-internals/#hsts` → *Delete domain security policies* → enter `mcp.netintegrate.net` (stale HSTS from an old cert/host can confuse the browser).
+9. **Same stack as Edge (roughly):** in PowerShell 5.1:  
+   `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }; (Invoke-WebRequest 'https://mcp.netintegrate.net:8443/' -UseBasicParsing).StatusCode`  
+   If you get **200** here but Edge still resets, the problem is almost entirely Edge/Chromium settings (QUIC, extensions, policies), not Nginx reachability.
+10. **Try Firefox** (or Chrome). If another browser works, use it for the Strategy Center or keep Edge with QUIC disabled and proxy/HSTS cleared.
 
-The repo’s `pitsngiggles-mcp.conf` sets **`ssl_session_tickets off`** on port 8443, which avoids a class of rare Chromium/Edge + OpenSSL ticket issues—reload Nginx after pulling the latest config.
+The repo’s `pitsngiggles-mcp.conf` sets **`ssl_session_tickets off`**, an **explicit `ssl_ciphers` / `ssl_ecdh_curve`** block on 8443, and reload Nginx after pulling—some Edge builds RST against OpenSSL’s default cipher ordering.
 
 ### If you ever publish the same name on the public internet
 
