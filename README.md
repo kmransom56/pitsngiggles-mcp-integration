@@ -63,7 +63,7 @@ In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. A
 
 ### Edge: `curl` works on the same PC, but Edge shows `ERR_CONNECTION_RESET`
 
-`curl` and Edge both use Windows, but Edge (Chromium) negotiates TLS and **HTTP/3 (QUIC)** differently than `curl`.
+Edge (Chromium) negotiates **HTTP/3 (QUIC)** and TLS extensions differently than a command-line **`curl.exe`** fetch. In **PowerShell 7+**, `curl` is an alias for **`Invoke-WebRequest`**, not the real curl—always test with **`curl.exe -vkI …`** when comparing behavior.
 
 1. **Compare trust:** run `curl -vI https://mcp.netintegrate.net:8443/` **without** `-k`. If that fails certificate verification but **with** `-k` it works, install your **internal root CA** into **Local Computer** trusted roots (`certlm.msc` → *Trusted Root Certification Authorities* → *Certificates* → import). Edge may not treat a user-only import the same way `curl -k` does.
 2. **Disable QUIC in Edge:** open `edge://flags`, search **Experimental QUIC protocol**, set to **Disabled**, restart Edge. QUIC uses **UDP** to the same host; broken or filtered UDP can produce resets while **TCP 443/8443 + TLS** (what `curl` uses) still works.
@@ -73,12 +73,16 @@ In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. A
 6. **Third‑party HTTPS inspection** (some antivirus): pause web/HTTPS scanning for a quick test; these tools often break Edge before they break `curl`.
 7. **WinHTTP / system proxy:** run `netsh winhttp show proxy`. If traffic is sent to a corporate proxy, Edge can RST while `curl` does not (curl often bypasses WinHTTP). Clear the proxy for testing, or add a bypass for `192.168.0.0/16` and internal hostnames.
 8. **HSTS cache:** in Edge open `edge://net-internals/#hsts` → *Delete domain security policies* → enter `mcp.netintegrate.net` (stale HSTS from an old cert/host can confuse the browser).
-9. **Same stack as Edge (roughly):** in PowerShell 5.1:  
-   `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }; (Invoke-WebRequest 'https://mcp.netintegrate.net:8443/' -UseBasicParsing).StatusCode`  
-   If you get **200** here but Edge still resets, the problem is almost entirely Edge/Chromium settings (QUIC, extensions, policies), not Nginx reachability.
+9. **PowerShell `Invoke-WebRequest` and Schannel:** .NET often uses **Windows Schannel** (same family as parts of Edge), not the same stack as **`curl.exe`**. Before `Invoke-WebRequest`, force TLS 1.2+ (older defaults cause “forcibly closed” against nginx `TLSv1.2+`):
+   ```powershell
+   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+   [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+   (Invoke-WebRequest 'https://mcp.netintegrate.net:8443/' -UseBasicParsing).StatusCode
+   ```
+   If it **still** closes after that, on the Nginx host temporarily set **`ssl_protocols TLSv1.2;`** (disable TLS 1.3), reload, and test again—some Windows/OpenSSL TLS 1.3 combinations RST; restore `TLSv1.2 TLSv1.3` once confirmed.
 10. **Try Firefox** (or Chrome). If another browser works, use it for the Strategy Center or keep Edge with QUIC disabled and proxy/HSTS cleared.
 
-The repo’s `pitsngiggles-mcp.conf` sets **`ssl_session_tickets off`**, an **explicit `ssl_ciphers` / `ssl_ecdh_curve`** block on 8443, and reload Nginx after pulling—some Edge builds RST against OpenSSL’s default cipher ordering.
+The repo’s `pitsngiggles-mcp.conf` sets **`ssl_session_tickets off`** and **`ssl_prefer_server_ciphers on`** on 8443 (reload Nginx after pulling). If Schannel-based clients still RST, try the temporary **`ssl_protocols TLSv1.2;`** test above.
 
 ### If you ever publish the same name on the public internet
 
