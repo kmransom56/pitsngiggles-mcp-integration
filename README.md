@@ -61,6 +61,19 @@ In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. A
 - **Firewall on the Nginx host:** allow inbound **TCP 8443** (and **80** if you use the HTTP→HTTPS redirect) from **other LAN clients**, not only from `127.0.0.1`.
 - **While reproducing in the browser**, tail Nginx errors: `sudo tail -f /var/log/nginx/pitsngiggles-mcp.error.log` — if the log stays empty on reset, packets are not reaching Nginx (firewall/router path).
 
+### Edge: `curl` works on the same PC, but Edge shows `ERR_CONNECTION_RESET`
+
+`curl` and Edge both use Windows, but Edge (Chromium) negotiates TLS and **HTTP/3 (QUIC)** differently than `curl`.
+
+1. **Compare trust:** run `curl -vI https://mcp.netintegrate.net:8443/` **without** `-k`. If that fails certificate verification but **with** `-k` it works, install your **internal root CA** into **Local Computer** trusted roots (`certlm.msc` → *Trusted Root Certification Authorities* → *Certificates* → import). Edge may not treat a user-only import the same way `curl -k` does.
+2. **Disable QUIC in Edge:** open `edge://flags`, search **Experimental QUIC protocol**, set to **Disabled**, restart Edge. QUIC uses **UDP** to the same host; broken or filtered UDP can produce resets while **TCP 443/8443 + TLS** (what `curl` uses) still works.
+3. **Secure DNS:** Settings → **Privacy, search, and services** → **Security** → use **your current service provider** (not a fixed public resolver) so internal names resolve like `nslookup` does.
+4. **Try Google Chrome** on the same PC. If Chrome works and Edge does not, keep QUIC disabled or reset Edge (Settings → Reset settings).
+5. **Narrow TLS:** on the Nginx host, temporarily set `ssl_protocols TLSv1.2;` (TLS 1.2 only), `nginx -t && reload`, test Edge again. If that fixes it, note your OpenSSL/nginx build and consider a TLS 1.3 cipher profile update; then restore `TLSv1.2 TLSv1.3` once fixed upstream.
+6. **Third‑party HTTPS inspection** (some antivirus): pause web/HTTPS scanning for a quick test; these tools often break Edge before they break `curl`.
+
+The repo’s `pitsngiggles-mcp.conf` sets **`ssl_session_tickets off`** on port 8443, which avoids a class of rare Chromium/Edge + OpenSSL ticket issues—reload Nginx after pulling the latest config.
+
 ### If you ever publish the same name on the public internet
 
 Use your registrar’s DNS (or split-horizon) with an **A** record to a **routable** public IP, open the same ports on that edge, and use a publicly trusted chain (or pin your CA only on clients you control).
