@@ -53,6 +53,14 @@ In this lab, **`netintegrate.net` is a local zone**, not public registrar DNS. A
 6. **Upstream** (`proxy_pass … :4768`): see comments in `pitsngiggles-mcp.conf`—fix **WSL2 → Windows** gateway IP when it changes, or use **`127.0.0.1`** if the telemetry app runs on the same Linux instance as Nginx.
 7. **Check:** from a client using your internal DNS: `nslookup mcp.netintegrate.net 192.168.0.252` then `curl -vkI https://mcp.netintegrate.net:8443/`.
 
+### Browser shows `ERR_CONNECTION_RESET` but `curl` works on the server
+
+- **Run the same curl on the PC where the browser fails** (not only on the Nginx box). If curl fails there, it is network/DNS/firewall, not “Edge vs Chrome.”
+- **Browser DNS bypass:** Chrome/Edge **Secure DNS / DNS over HTTPS** can ignore Windows DNS (`192.168.0.252` / `192.168.0.253`) and never see your internal zone. Turn off secure DNS for that profile, or choose **“Use your current service provider”**, then retry.
+- **Confirm resolution on that PC:** `nslookup mcp.netintegrate.net 192.168.0.252` must return the **LAN IP of the Nginx host** (same address curl uses).
+- **Firewall on the Nginx host:** allow inbound **TCP 8443** (and **80** if you use the HTTP→HTTPS redirect) from **other LAN clients**, not only from `127.0.0.1`.
+- **While reproducing in the browser**, tail Nginx errors: `sudo tail -f /var/log/nginx/pitsngiggles-mcp.error.log` — if the log stays empty on reset, packets are not reaching Nginx (firewall/router path).
+
 ### If you ever publish the same name on the public internet
 
 Use your registrar’s DNS (or split-horizon) with an **A** record to a **routable** public IP, open the same ports on that edge, and use a publicly trusted chain (or pin your CA only on clients you control).
