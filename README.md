@@ -21,7 +21,23 @@ The integration transforms the local telemetry tool into a professional racing s
 -   `strategy_center.html`: The premium integrated dashboard (served at `https://mcp.netintegrate.net:8443/`).
 -   `launch_race_center.ps1`: One-click launcher for the entire suite.
 -   `start_mcp.ps1`: Simplified telemetry app starter.
+-   `start_engineer_voice.ps1`: **LAN race engineer** (Ollama on this PC + live telemetry; see below).
 -   `docs/AI_CLIENT_SETUP.md`: Guide for connecting Cursor, ChatGPT, etc.
+-   `docs/CONSOLE_VOICE.md`: Why Xbox + PC audio is split; engineer voice is on the **PC**.
+
+## 🎙️ LAN race engineer (Windows PC: Ollama + telemetry, Xbox feeds UDP only)
+
+The **game runs on Xbox**; **Pits n' Giggles** on the **Windows PC** receives UDP telemetry. This repo adds a **local** service so you can talk to an **Ollama** model with **`/race-info` + `/telemetry-info`** in the system prompt—no cloud LLM. Voice I/O is on the **PC** (headset). See `docs/CONSOLE_VOICE.md` for why “audio through the console only” is a separate path.
+
+1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1` (or set `OLLAMA_MODEL` to a model you have).
+2. **Start Pits n' Giggles** so the HTTP server is up on **4768** (telemetry from Xbox as you already do).
+3. **Start the engineer service:**  
+   `.\start_engineer_voice.ps1`  
+   It listens on **http://127.0.0.1:11734** only (localhost). Open that URL in **Edge/Chrome** for the two-pane UI (engineering view + chat/PTT).
+4. **Optional: local STT** (faster transcribe, no browser):  
+   `pip install -r engineer_voice/requirements-optional-stt.txt`  
+   (re-run `start_engineer_voice.ps1`). **ffmpeg** in `PATH` helps for **webm** clips. If STT is off, the page falls back to **Web Speech API** for dictation.
+5. **Env overrides:** `OLLAMA_BASE`, `PNG_BASE` (default `http://127.0.0.1:4768`), `OLLAMA_MODEL`, `ENGINEER_VOICE_PORT` (default `11734`).
 
 ## 🛠️ Quick Setup (WSL / Ubuntu)
 

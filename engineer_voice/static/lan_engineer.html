@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LAN Race Engineer | Ollama + Telemetry</title>
+  <style>
+    :root { --bg: #0a0c10; --panel: #12151c; --accent: #00e5ff; --text: #e6eaef; --muted: #6b7684; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 10px 16px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1rem; font-weight: 600; margin: 0; }
+    .row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); }
+    .main { flex: 1; display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+    @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+    .frame-wrap { min-height: 0; }
+    iframe { width: 100%; height: 100%; min-height: 400px; border: none; background: #000; }
+    .panel { display: flex; flex-direction: column; border-left: 1px solid #222; min-height: 0; }
+    .health { font-size: 0.75rem; padding: 8px 12px; background: var(--panel); }
+    .health code { color: var(--accent); }
+    .chat { flex: 1; overflow: auto; padding: 8px; background: #0d0f14; }
+    .msg { margin: 8px 0; padding: 8px 10px; border-radius: 8px; max-width: 100%; font-size: 0.9rem; white-space: pre-wrap; }
+    .user { background: #1a2332; align-self: flex-end; }
+    .ai { background: #152018; border: 1px solid #1e3320; }
+    .sys { color: var(--muted); font-size: 0.8rem; }
+    .controls { padding: 10px; border-top: 1px solid #222; display: flex; flex-direction: column; gap: 8px; }
+    textarea, input { width: 100%; background: #0d0f14; border: 1px solid #2a2f3a; color: var(--text); border-radius: 6px; padding: 8px; font: inherit; }
+    textarea { min-height: 64px; resize: vertical; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { background: #1e2a3a; color: var(--text); border: 1px solid #334; border-radius: 6px; padding: 8px 12px; cursor: pointer; font: inherit; }
+    button:hover { background: #2a3a4f; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.ptt { background: #1a3d2a; border-color: #2a6a40; }
+    button.ptt.rec { background: #3d1a1a; border-color: #6a2a2a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LAN Race Engineer (Ollama + PNG telemetry)</h1>
+    <div class="row">Telemetry: <code id="png-url">http://127.0.0.1:4768/eng-view</code></div>
+  </header>
+  <div class="main">
+    <div class="frame-wrap">
+      <iframe id="tel" title="Engineering view" src="http://127.0.0.1:4768/eng-view"></iframe>
+    </div>
+    <div class="panel">
+      <div class="health" id="health">Checking services…</div>
+      <div class="chat" id="log"></div>
+      <div class="controls">
+        <label class="row">Type or use voice (PTT) — <span id="stt-hint">browser speech if no local STT</span></label>
+        <textarea id="q" placeholder="Ask about strategy, tyres, understeer…" autocomplete="off"></textarea>
+        <div class="bar">
+          <button type="button" id="send">Send</button>
+          <button type="button" class="ptt" id="ptt" title="Hold to talk (or click to toggle)">Push to talk</button>
+          <label class="row"><input type="checkbox" id="telemetry" checked /> Include live telemetry in prompt</label>
+        </div>
+        <div class="bar">
+          <label class="row">Speak reply <input type="checkbox" id="speak" checked /></label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const log = document.getElementById("log");
+    const healthEl = document.getElementById("health");
+    const q = document.getElementById("q");
+    const API = () => window.location.origin;
+
+    function addMsg(text, who) {
+      const d = document.createElement("div");
+      d.className = "msg " + (who || "ai");
+      d.textContent = text;
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    }
+    function addSys(text) {
+      const d = document.createElement("div");
+      d.className = "msg sys";
+      d.textContent = text;
+      log.appendChild(d);
+    }
+
+    async function refreshHealth() {
+      try {
+        const r = await fetch(API() + "/health");
+        const j = await r.json();
+        healthEl.innerHTML = "Ollama: " + (j.ollama ? "OK" : "down") + " · Pits n' Giggles: " + (j.pits_n_giggles_http ? "OK" : "down") + " · Local STT: " + (j.faster_whisper ? "faster-whisper" : "off") + " · model <code>" + (j.ollama_model || "") + "</code>";
+        if (j.faster_whisper) document.getElementById("stt-hint").textContent = "local faster-whisper";
+      } catch (e) {
+        healthEl.textContent = "Health check failed: " + e;
+      }
+    }
+    setInterval(refreshHealth, 8000);
+    refreshHealth();
+
+    async function sendChat(userText) {
+      const t = (userText || "").trim();
+      if (!t) return;
+      addMsg(t, "user");
+      q.value = "";
+      addSys("… calling Ollama");
+      const inc = document.getElementById("telemetry").checked;
+      try {
+        const r = await fetch(API() + "/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: t, include_telemetry: inc }),
+        });
+        if (!r.ok) {
+          const e = await r.text();
+          throw new Error(e || r.status);
+        }
+        const j = await r.json();
+        log.querySelectorAll(".msg.sys").forEach((x) => /calling Ollama/.test(x.textContent) && x.remove());
+        addMsg(j.reply, "ai");
+        if (document.getElementById("speak").checked && "speechSynthesis" in window) {
+          const u = new SpeechSynthesisUtterance(j.reply);
+          u.rate = 1.05;
+          window.speechSynthesis.speak(u);
+        }
+      } catch (e) {
+        log.querySelectorAll(".msg.sys").forEach((x) => /calling Ollama/.test(x.textContent) && x.remove());
+        addSys("Error: " + (e && e.message ? e.message : e));
+      }
+    }
+
+    document.getElementById("send").addEventListener("click", () => sendChat(q.value));
+    q.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(q.value); }
+    });
+
+    // --- PTT: MediaRecorder to /api/stt, else Web Speech API ---
+    let rec = null;
+    let chunks = [];
+    const ptt = document.getElementById("ptt");
+    ptt.addEventListener("mousedown", (e) => { e.preventDefault(); startRec(); });
+    ptt.addEventListener("mouseup", (e) => { e.preventDefault(); stopRec(); });
+    ptt.addEventListener("mouseleave", () => { if (rec && rec.state === "recording") stopRec(); });
+    ptt.addEventListener("touchstart", (e) => { e.preventDefault(); startRec(); });
+    ptt.addEventListener("touchend", (e) => { e.preventDefault(); stopRec(); });
+
+    async function startRec() {
+      if (rec && rec.state === "recording") return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        if (!window.MediaRecorder) { fallbackStt(); stream.getTracks().forEach((t) => t.stop()); return; }
+        rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "" });
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          uploadStt();
+        };
+        rec.start(200);
+        ptt.classList.add("rec");
+      } catch (e) {
+        addSys("Mic: " + e);
+        fallbackStt();
+      }
+    }
+    function stopRec() {
+      ptt.classList.remove("rec");
+      if (rec && rec.state === "recording") rec.stop();
+      rec = null;
+    }
+    async function uploadStt() {
+      if (!chunks.length) { fallbackStt(); return; }
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      const fd = new FormData();
+      fd.append("audio", blob, "clip.webm");
+      try {
+        const r = await fetch(API() + "/api/stt", { method: "POST", body: fd });
+        if (r.status === 501) { fallbackStt(); return; }
+        if (!r.ok) { addSys("STT: " + (await r.text())); return; }
+        const j = await r.json();
+        if (j.text) { q.value = j.text; sendChat(j.text); }
+      } catch (e) {
+        fallbackStt();
+      }
+    }
+    function fallbackStt() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { addSys("No Web Speech; type your question or install faster-whisper for local STT."); return; }
+      const s = new SR();
+      s.lang = "en-US";
+      s.onresult = (e) => {
+        const t = e.results[0] && e.results[0][0] && e.results[0][0].transcript;
+        if (t) { q.value = t; sendChat(t); }
+      };
+      s.onerror = () => addSys("Speech recognition error");
+      s.start();
+    }
+
+    addSys("Open this page at http://127.0.0.1:11734 (start start_engineer_voice.ps1). Ensure Ollama and Pits n' Giggles are running.");
+  </script>
+</body>
+</html>
