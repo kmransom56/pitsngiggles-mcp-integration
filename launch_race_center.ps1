@@ -58,6 +58,22 @@ function Get-EngineerPythonExe {
                 if (Test-Path -LiteralPath $cand) { return $cand }
             }
         }
+        $tryTags = @(
+            "-V:Astral/CPython3.13.11",
+            "-V:Astral/CPython3.12.12"
+        )
+        if ($env:ENGINEER_PY_TAG) {
+            $tryTags = @($env:ENGINEER_PY_TAG) + $tryTags
+        }
+        foreach ($tag in $tryTags) {
+            if (-not $tag) { continue }
+            $o = & py $tag -c "import sys; print(sys.executable)" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $o -and ($o -notmatch "Error|not found|suitable")) {
+                $line = if ($o -is [array]) { $o[-1] } else { $o }
+                $cand = $line.ToString().Trim()
+                if (Test-Path -LiteralPath $cand) { return $cand }
+            }
+        }
         $o3 = & py -3 -c "import sys; print(sys.executable)" 2>&1
         if ($LASTEXITCODE -eq 0 -and $o3 -and ($o3 -notmatch "Error|not found|suitable")) {
             $line = if ($o3 -is [array]) { $o3[-1] } else { $o3 }
