@@ -42,3 +42,39 @@ The **engineer voice** service is a **separate** small app with its own `enginee
 | `engineer_voice` HTTP service | **Dedicated venv** in `engineer_voice\.venv` + **pip** (as driven by the PowerShell scripts) |
 
 If anything in the docs still says to use only `uv` for the main app, treat **Poetry** as the source of truth unless you are deliberately using an alternative venv as above.
+
+## Windows: “script is installed in … which is not on PATH”
+
+If you `pip install` with the **per-user** layout (e.g. into `…\AppData\Roaming\Python\Python3xx\site-packages`) **without** a venv, pip may place companion `.exe` tools under `…\AppData\Roaming\Python\Python3xx\Scripts` and warn that this directory is not on your **user PATH**. Your **imports still work**; only running those **CLI** tools by name from a shell may fail until you add that `Scripts` folder to your user `Path` or, preferably, use a **project venv** (e.g. `engineer_voice\.venv`) and install with that environment’s `python -m pip`.
+
+## What to add to PATH (Windows)
+
+Add **user** `Path` entries (Settings → *System* → *About* → *Advanced system settings* → *Environment variables* → select **Path** under your user → **Edit** → **New**). You only need the rows that match how you work.
+
+| What | Typical directory to add | When you need it |
+|------|--------------------------|------------------|
+| **Per-user Python scripts** (pip/Windows Store / `python` installer) | `%UserProfile%\AppData\Roaming\Python\Python314\Scripts` | You installed packages with a **per-user** Python and want `tqdm`, `huggingface-cli`, `hf`, etc. on PATH. Replace **`314`** with your folder (e.g. `Python312` for 3.12, `Python313` for 3.13, `Python314` for 3.14). Check what exists under `%UserProfile%\AppData\Roaming\Python\`. |
+| **Repository venv (main app)** | `<repo>\.venv\Scripts` | You use a project `.venv` at the repo root and want to run `python`, `uvicorn`, etc. without typing the full path. |
+| **Engineer voice venv** | `<repo>\engineer_voice\.venv\Scripts` | Same, for the LAN engineer venv (e.g. `uvicorn.exe` in that venv). |
+| **Poetry** | See `where poetry` after install, or e.g. `%UserProfile%\.local\bin` (installer-dependent) | The `poetry` command is not found in a new terminal. |
+| **ffmpeg** | Folder that contains `ffmpeg.exe` (e.g. from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or `chocolatey`’s `bin`) | **Optional** local STT / webm paths in `engineer_voice`; many setups work without it, but the docs note it for some formats. |
+
+**Prefer venvs over global Scripts:** if you use **`engineer_voice\.venv`**, you usually **do not** need the Roaming `Python314\Scripts` path for this repo, as long as you run `.\engineer_voice\.venv\Scripts\python.exe` or `python -m uvicorn` with that venv’s Python.
+
+**One-off in PowerShell (current session only)**, after replacing the version if needed:
+
+```powershell
+$env:Path = "$env:UserProfile\AppData\Roaming\Python\Python314\Scripts;" + $env:Path
+```
+
+**Persist for your user (PowerShell)** — only if you are sure the path is correct:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  "$env:UserProfile\AppData\Roaming\Python\Python314\Scripts;" + [Environment]::GetEnvironmentVariable("Path", "User"),
+  "User"
+)
+```
+
+Open a **new** terminal after changing PATH.
