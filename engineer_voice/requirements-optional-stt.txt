@@ -1,0 +1,2 @@
+# Local speech-to-text (install ffmpeg in PATH for many formats, e.g. webm)
+faster-whisper>=1.0.0
