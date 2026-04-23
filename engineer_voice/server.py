@@ -5,16 +5,25 @@ answers via a local Ollama model. Serves a small browser UI on the same port.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 APP_DIR = Path(__file__).resolve().parent
@@ -25,6 +34,12 @@ PNG_BASE = os.environ.get("PNG_BASE", "http://127.0.0.1:4768")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 ENGINEER_PORT = int(os.environ.get("ENGINEER_VOICE_PORT", "11734"))
+# float32 audio from browser; 48k common from AudioContext, decimate ~3:1 to match Whisper
+WS_STT_IN_SR = int(os.environ.get("WS_STT_IN_SAMPLE_RATE", "48000"))
+WS_STT_TARGET_SR = 16000
+WS_STT_CHUNK_S = float(os.environ.get("WS_STT_CHUNK_S", "1.4"))
+# max ~2 min of audio at 16k float32
+WS_STT_MAX_FLOATS = int(os.environ.get("WS_STT_MAX_FLOATS", str(30 * 16000)))
 
 F1_ENGINEER_SYSTEM = """You are a professional F1 race engineer for F1 23/24/25 sim racing. \
 You have live telemetry and race context in each message. Be concise, radio-style: 2-4 short sentences \
@@ -120,6 +135,49 @@ async def _ollama_chat(client: httpx.AsyncClient, system: str, user: str) -> str
     return msg
 
 
+def _resample_to_16k_mono(x_in: "object", in_sr: int) -> "object":  # numpy ndarray
+    import numpy as np
+
+    x = np.asarray(x_in, dtype=np.float32)
+    if x.size < 1:
+        return x
+    if in_sr == WS_STT_TARGET_SR:
+        return x
+    step = max(1, int(round(in_sr / float(WS_STT_TARGET_SR))))
+    return x[::step].astype(np.float32)
+
+
+def _transcribe_float32_16k(audio: "object") -> str:  # numpy ndarray, mono 16 kHz
+    import numpy as np
+
+    arr = np.asarray(audio, dtype=np.float32)
+    if arr.size < 100:
+        return ""
+    m = _get_whisper()
+    if not m:
+        return ""
+    segs, _ = m.transcribe(
+        arr,
+        language="en",
+        vad_filter=True,
+    )
+    return " ".join(s.text for s in segs).strip()
+
+
+def _ws_buffer_to_text(buf: bytearray, in_sample_rate: int) -> str:
+    import numpy as np
+
+    if len(buf) < 400:
+        return ""
+    x = np.frombuffer(bytes(buf), dtype=np.float32)
+    y = _resample_to_16k_mono(x, in_sample_rate)
+    if y.size < 100:
+        return ""
+    if y.size > WS_STT_MAX_FLOATS:
+        y = y[-WS_STT_MAX_FLOATS:].copy()
+    return _transcribe_float32_16k(y)
+
+
 @app.get("/")
 async def index():
     p = STATIC / "lan_engineer.html"
@@ -151,6 +209,7 @@ async def health():
         "pits_n_giggles_http": png,
         "faster_whisper": wsp,
         "ollama_model": OLLAMA_MODEL,
+        "websocket_stt": wsp,
     }
 
 
@@ -165,6 +224,157 @@ async def chat(item: ChatIn):
             context_ok = False
             reply = await _ollama_chat(client, F1_ENGINEER_SYSTEM, item.message)
     return ChatOut(reply=reply, context_ok=context_ok)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(item: ChatIn):
+    """Proxies Ollama NDJSON; first line is `engineer_meta` with `context_ok`."""
+
+    async def gen():
+        async with httpx.AsyncClient() as client:
+            if item.include_telemetry:
+                ctx, context_ok = await _fetch_png_context(client)
+                system = f"{F1_ENGINEER_SYSTEM}\n\n## Live context (JSON)\n{ctx}\n"
+            else:
+                context_ok = False
+                system = F1_ENGINEER_SYSTEM
+            meta = (
+                json.dumps(
+                    {
+                        "engineer_meta": {
+                            "context_ok": context_ok,
+                        }
+                    }
+                )
+                + "\n"
+            )
+            yield meta.encode("utf-8")
+            body = {
+                "model": OLLAMA_MODEL,
+                "stream": True,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": item.message},
+                ],
+            }
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{OLLAMA_BASE}/api/chat",
+                    json=body,
+                    timeout=httpx.Timeout(300.0),
+                ) as response:
+                    if response.status_code != 200:
+                        err = (await response.aread()).decode()[:2000]
+                        err_line = (
+                            json.dumps(
+                                {
+                                    "error": f"Ollama {response.status_code}",
+                                    "detail": err,
+                                }
+                            )
+                            + "\n"
+                        )
+                        yield err_line.encode("utf-8")
+                        return
+                    async for line in response.aiter_lines():
+                        if line:
+                            yield (line + "\n").encode("utf-8")
+            except httpx.RequestError as e:
+                err_line = (
+                    json.dumps(
+                        {
+                            "error": "ollama_request",
+                            "detail": str(e),
+                        }
+                    )
+                    + "\n"
+                )
+                yield err_line.encode("utf-8")
+
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@app.websocket("/ws/stt")
+async def ws_stt(websocket: WebSocket):
+    await websocket.accept()
+    if not _FASTER:
+        await websocket.close(
+            code=1013,
+            reason="faster_whisper not installed; see requirements-optional-stt",
+        )
+        return
+    buf = bytearray()
+    in_sr = WS_STT_IN_SR
+    last_t = 0.0
+    _transcribe_lock = threading.Lock()
+
+    try:
+        while True:
+            try:
+                msg = await websocket.receive()
+            except WebSocketDisconnect:
+                break
+            mtype = msg.get("type")
+            if mtype == "websocket.disconnect":
+                break
+            if mtype == "websocket.receive" and msg.get("text") is not None:
+                try:
+                    data = json.loads(msg["text"])
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    data = {}
+                if data.get("type") == "config" and "sample_rate" in data:
+                    in_sr = int(data["sample_rate"])
+                if data.get("type") in ("end", "flush") and len(buf) > 0:
+                    t = _ws_buffer_to_text(buf, in_sr)
+                    if t:
+                        await websocket.send_text(
+                            json.dumps({"type": "stt", "partial": False, "text": t})
+                        )
+                    buf.clear()
+                if data.get("type") == "close":
+                    break
+            if mtype == "websocket.receive" and msg.get("bytes") is not None:
+                buf.extend(msg["bytes"])
+                maxb = WS_STT_MAX_FLOATS * 4
+                if len(buf) > maxb:
+                    del buf[: len(buf) - maxb]
+                n = len(buf) // 4
+                need = int(WS_STT_TARGET_SR * WS_STT_CHUNK_S)
+                if n < need:
+                    continue
+                now = time.monotonic()
+                if now - last_t < WS_STT_CHUNK_S * 0.4:
+                    continue
+                last_t = now
+                bcopy = bytes(buf)
+
+                def _run() -> str:
+                    with _transcribe_lock:
+                        return _ws_buffer_to_text(bytearray(bcopy), in_sr)
+
+                text = await asyncio.to_thread(_run)
+                if text:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "stt",
+                                "partial": True,
+                                "text": text,
+                            }
+                        )
+                    )
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:  # noqa: BLE001
+        try:
+            await websocket.close(code=1011, reason=str(e)[:200])
+        except Exception:
+            pass
 
 
 @app.post("/api/stt")

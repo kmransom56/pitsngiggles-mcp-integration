@@ -4,22 +4,24 @@ This project uses Python 3.12 and is structured as a suite of apps under the `ap
 
 ## 🧰 Requirements
 
-- Python 3.12 installed and available in your `PATH`
-- [Poetry](https://python-poetry.org/) installed (preferred for dependency management)
+- **Python 3.12 or 3.13** (see `requires-python` in `pyproject.toml`) on your `PATH`
+- **[Poetry](https://python-poetry.org/)** — the supported way to create the venv and install dependencies (this repo is **not** “uv-only”; see **[PYTHON_ENVIRONMENT.md](PYTHON_ENVIRONMENT.md)** for Poetry vs. optional `uv`/manual venv)
 
 ## 📦 Install Dependencies
 
-Install only the production dependencies if you plan on running only the app and none of the tests
+Install only the production dependencies if you plan on running only the app and none of the tests:
+
 ```bash
 poetry install --without dev
 ```
 
-If you plan on running app, dev utils and unit tests, install all dependencies
+If you plan on running the app, dev utils, and unit tests, install all dependencies:
+
 ```bash
 poetry install
 ```
 
-This sets up a virtual environment and installs everything defined in `pyproject.toml`.
+This uses Poetry to set up a **virtual environment** and install what is defined in `pyproject.toml` (the project is `package-mode = false`, so you are not installing a library package, but you get all app dependencies).
 
 ---
 
@@ -68,14 +70,17 @@ poetry run python -m apps.dev_tools.telemetry_replayer --file-name example.f1pca
 
 ## 🧼 Cleaning Up
 
-To remove the virtual environment created by Poetry:
+To remove the virtual environment created by Poetry, list envs and remove the one for this project:
 
 ```bash
-poetry env remove python
+poetry env list
+poetry env remove <name-or-path-from-list>
 ```
 
-To reinstall everything clean:
+To reinstall from a clean state:
 
 ```bash
 poetry install --no-root
 ```
+
+The **`engineer_voice/`** service uses its **own** venv at `engineer_voice\.venv` (created by the PowerShell launchers) and **`pip install -r engineer_voice/requirements.txt`**, not the Poetry venv. Remove that directory separately if you need a clean engineer voice install.

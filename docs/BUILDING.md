@@ -6,9 +6,11 @@ This document outlines how to build the `Pits n' Giggles` app into a standalone 
 
 ## 🔧 Requirements
 
-- **Python 3.13**
-- **[Poetry](https://python-poetry.org/)** for dependency management
+- **Python 3.12 or 3.13** (see `requires-python` in `pyproject.toml`)
+- **[Poetry](https://python-poetry.org/)** for dependency management (this is the **supported** path)
 - A Windows machine (macOS support is planned but not yet active)
+
+For a longer explanation of **Poetry vs. optional venv/uv** and the **`package-mode = false`** layout, read **[PYTHON_ENVIRONMENT.md](PYTHON_ENVIRONMENT.md)**.
 
 ---
 
@@ -20,7 +22,7 @@ This document outlines how to build the `Pits n' Giggles` app into a standalone 
    poetry install --without dev
    ```
 
-   This will install everything required to build and run the app in production, including PyInstaller.
+   This will install everything required to build and run the app in production, including PyInstaller, into the Poetry-managed virtual environment. The project is not published as a pip package (`package-mode = false`); you still get all runtime and build dependencies.
 
 ---
 

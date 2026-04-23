@@ -24,6 +24,13 @@ The integration transforms the local telemetry tool into a professional racing s
 -   `start_engineer_voice.ps1`: **LAN race engineer** (Ollama on this PC + live telemetry; see below).
 -   `docs/AI_CLIENT_SETUP.md`: Guide for connecting Cursor, ChatGPT, etc.
 -   `docs/CONSOLE_VOICE.md`: Why Xbox + PC audio is split; engineer voice is on the **PC**.
+-   `docs/PYTHON_ENVIRONMENT.md`: **Poetry** (official) vs optional **uv**/venv, `package-mode`, and the separate **`engineer_voice`** venv.
+-   `docs/BUILDING.md` / `docs/RUNNING.md`: PyInstaller build and running the app with **`poetry run`**.
+
+## 🐍 Python, Poetry, and building
+
+- The **Pits n’ Giggles** application and Windows executable build are documented with **[Poetry](https://python-poetry.org/)** (`poetry install`, `poetry run …`). The repo is **not** a “uv-only” setup; `uv` or a manual venv is an optional alternative—see **[docs/PYTHON_ENVIRONMENT.md](docs/PYTHON_ENVIRONMENT.md)**.
+- The **`engineer_voice`** stack uses a **dedicated** virtual environment at `engineer_voice\.venv` and **`pip`**, as created by `start_engineer_voice.ps1` / `launch_race_center.ps1` (not the same venv as Poetry for the main app).
 
 ## 🎙️ LAN race engineer (Windows PC: Ollama + telemetry, Xbox feeds UDP only)
 

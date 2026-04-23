@@ -11,7 +11,7 @@
     header { padding: 10px 16px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     h1 { font-size: 1rem; font-weight: 600; margin: 0; }
     .row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); }
-    .main { flex: 1; display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+    .main { flex: 1; display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
     @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
     .frame-wrap { min-height: 0; }
     iframe { width: 100%; height: 100%; min-height: 400px; border: none; background: #000; }
@@ -22,6 +22,7 @@
     .msg { margin: 8px 0; padding: 8px 10px; border-radius: 8px; max-width: 100%; font-size: 0.9rem; white-space: pre-wrap; }
     .user { background: #1a2332; align-self: flex-end; }
     .ai { background: #152018; border: 1px solid #1e3320; }
+    .ai.streaming { border-color: #2a4a3a; }
     .sys { color: var(--muted); font-size: 0.8rem; }
     .controls { padding: 10px; border-top: 1px solid #222; display: flex; flex-direction: column; gap: 8px; }
     textarea, input { width: 100%; background: #0d0f14; border: 1px solid #2a2f3a; color: var(--text); border-radius: 6px; padding: 8px; font: inherit; }
@@ -32,6 +33,8 @@
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.ptt { background: #1a3d2a; border-color: #2a6a40; }
     button.ptt.rec { background: #3d1a1a; border-color: #6a2a2a; }
+    button.tiny { font-size: 0.75rem; padding: 4px 8px; }
+    .sub { font-size: 0.75rem; color: var(--muted); line-height: 1.3; }
   </style>
 </head>
 <body>
@@ -47,11 +50,30 @@
       <div class="health" id="health">Checking services…</div>
       <div class="chat" id="log"></div>
       <div class="controls">
-        <label class="row">Type or use voice (PTT) — <span id="stt-hint">browser speech if no local STT</span></label>
+        <label class="row">Type, PTT, continuous browser STT, or local Whisper (WebSocket) — <span id="stt-hint">—</span></label>
         <textarea id="q" placeholder="Ask about strategy, tyres, understeer…" autocomplete="off"></textarea>
         <div class="bar">
+          <label class="row"><input type="checkbox" id="stream-ollama" checked /> Ollama stream (NDJSON)</label>
+        </div>
+        <div class="bar">
           <button type="button" id="send">Send</button>
-          <button type="button" class="ptt" id="ptt" title="Hold to talk (or click to toggle)">Push to talk</button>
+          <button type="button" class="ptt" id="ptt" title="Hold to talk">Push to talk (local)</button>
+        </div>
+        <div class="bar sub">Browser continuous STT (no server audio):</div>
+        <div class="bar">
+          <button type="button" id="cont-toggle" class="tiny">Start continuous (browser)</button>
+        </div>
+        <div class="bar sub">faster_whisper + WebSocket (higher quality; run pip install -r requirements-optional-stt.txt):</div>
+        <div class="bar">
+          <button type="button" id="ws-stt-go" class="tiny">Start server STT stream</button>
+          <button type="button" id="ws-stt-end" class="tiny" disabled>Flush phrase</button>
+          <button type="button" id="ws-stt-stop" class="tiny" disabled>Stop server STT</button>
+        </div>
+        <div class="bar">
+          <label class="row"><input type="checkbox" id="ws-autosend" /> Auto-send (debounced) on partial</label>
+          <label class="row"><input type="checkbox" id="ws-flush-send" checked /> Send to engineer on “Flush phrase”</label>
+        </div>
+        <div class="bar">
           <label class="row"><input type="checkbox" id="telemetry" checked /> Include live telemetry in prompt</label>
         </div>
         <div class="bar">
@@ -65,6 +87,17 @@
     const healthEl = document.getElementById("health");
     const q = document.getElementById("q");
     const API = () => window.location.origin;
+    const wsUrl = () => (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws/stt";
+
+    let contRec = null;
+    let wsStt = null;
+    let acStt = null;
+    let procStt = null;
+    let streamSrc = null;
+    let sttDebounce = null;
+    const DE_MS = 1950;
+    let muteNode = null;
+    let mediaStt = null;
 
     function addMsg(text, who) {
       const d = document.createElement("div");
@@ -79,13 +112,40 @@
       d.textContent = text;
       log.appendChild(d);
     }
+    function removeCallingSys() {
+      log.querySelectorAll(".msg.sys").forEach((x) => {
+        if (/\b(Ollama|ollama|calling|stream)\b/.test(x.textContent)) x.remove();
+      });
+    }
+    function addStreamingAi() {
+      const d = document.createElement("div");
+      d.className = "msg ai streaming";
+      d.textContent = "";
+      log.appendChild(d);
+      return d;
+    }
+
+    function speakIfEnabled(fullText) {
+      if (document.getElementById("speak").checked && fullText && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(fullText);
+        u.rate = 1.05;
+        window.speechSynthesis.speak(u);
+      }
+    }
 
     async function refreshHealth() {
       try {
         const r = await fetch(API() + "/health");
         const j = await r.json();
-        healthEl.innerHTML = "Ollama: " + (j.ollama ? "OK" : "down") + " · Pits n' Giggles: " + (j.pits_n_giggles_http ? "OK" : "down") + " · Local STT: " + (j.faster_whisper ? "faster-whisper" : "off") + " · model <code>" + (j.ollama_model || "") + "</code>";
-        if (j.faster_whisper) document.getElementById("stt-hint").textContent = "local faster-whisper";
+        const stt = j.faster_whisper ? "faster-whisper" : "off";
+        const wss = j.websocket_stt ? "on" : "off";
+        healthEl.innerHTML = "Ollama: " + (j.ollama ? "OK" : "down") + " · PNG HTTP: " + (j.pits_n_giggles_http ? "OK" : "down")
+          + " · STT: " + stt + " · WS: " + wss
+          + " · model <code>" + (j.ollama_model || "") + "</code>";
+        document.getElementById("stt-hint").textContent = j.faster_whisper
+          ? "Whisper (HTTP + WebSocket) available"
+          : "browser / install optional STT for Whisper";
       } catch (e) {
         healthEl.textContent = "Health check failed: " + e;
       }
@@ -93,43 +153,127 @@
     setInterval(refreshHealth, 8000);
     refreshHealth();
 
-    async function sendChat(userText) {
-      const t = (userText || "").trim();
-      if (!t) return;
-      addMsg(t, "user");
+    async function sendChatBuffered(t) {
+      const text = (t || "").trim();
+      if (!text) return;
+      addMsg(text, "user");
       q.value = "";
-      addSys("… calling Ollama");
+      addSys("… calling Ollama (buffered)");
       const inc = document.getElementById("telemetry").checked;
+      let r;
       try {
-        const r = await fetch(API() + "/api/chat", {
+        r = await fetch(API() + "/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: t, include_telemetry: inc }),
+          body: JSON.stringify({ message: text, include_telemetry: inc }),
         });
-        if (!r.ok) {
-          const e = await r.text();
-          throw new Error(e || r.status);
-        }
-        const j = await r.json();
-        log.querySelectorAll(".msg.sys").forEach((x) => /calling Ollama/.test(x.textContent) && x.remove());
-        addMsg(j.reply, "ai");
-        if (document.getElementById("speak").checked && "speechSynthesis" in window) {
-          const u = new SpeechSynthesisUtterance(j.reply);
-          u.rate = 1.05;
-          window.speechSynthesis.speak(u);
-        }
       } catch (e) {
-        log.querySelectorAll(".msg.sys").forEach((x) => /calling Ollama/.test(x.textContent) && x.remove());
+        removeCallingSys();
+        addSys("Error: " + (e && e.message ? e.message : e));
+        return;
+      }
+      removeCallingSys();
+      if (!r.ok) {
+        const e = await r.text();
+        addSys("Error: " + (e || r.status));
+        return;
+      }
+      const j = await r.json();
+      addMsg(j.reply, "ai");
+      speakIfEnabled(j.reply);
+    }
+
+    async function sendChatStream(t) {
+      const text = (t || "").trim();
+      if (!text) return;
+      addMsg(text, "user");
+      q.value = "";
+      addSys("… Ollama stream");
+      const inc = document.getElementById("telemetry").checked;
+      let r;
+      try {
+        r = await fetch(API() + "/api/chat/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, include_telemetry: inc }),
+        });
+      } catch (e) {
+        removeCallingSys();
+        addSys("Error: " + (e && e.message ? e.message : e));
+        return;
+      }
+      if (!r.ok) {
+        removeCallingSys();
+        const e = await r.text();
+        addSys("Error: " + (e || r.status));
+        return;
+      }
+      const out = addStreamingAi();
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let lineBuf = "";
+      let acc = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        lineBuf += dec.decode(value, { stream: true });
+        const parts = lineBuf.split("\n");
+        lineBuf = parts.pop() || "";
+        for (const line of parts) {
+          if (!line.trim()) continue;
+          let o;
+          try {
+            o = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (o.engineer_meta) continue;
+          if (o.error) {
+            removeCallingSys();
+            out.classList.remove("streaming");
+            addSys("Stream error: " + (o.detail || o.error));
+            return;
+          }
+          if (o.message && o.message.content) {
+            acc += o.message.content;
+            out.textContent = acc;
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+      }
+      if (lineBuf.trim()) {
+        try {
+          const o = JSON.parse(lineBuf);
+          if (o.message && o.message.content) {
+            acc += o.message.content;
+            out.textContent = acc;
+          }
+        } catch { /* keep acc */ }
+      }
+      removeCallingSys();
+      out.classList.remove("streaming");
+      speakIfEnabled(acc);
+    }
+
+    async function sendToEngineer(t) {
+      const s = (t || "").trim();
+      if (!s) return;
+      const stream = document.getElementById("stream-ollama").checked;
+      try {
+        if (stream) await sendChatStream(s);
+        else await sendChatBuffered(s);
+      } catch (e) {
+        removeCallingSys();
         addSys("Error: " + (e && e.message ? e.message : e));
       }
     }
 
-    document.getElementById("send").addEventListener("click", () => sendChat(q.value));
+    document.getElementById("send").addEventListener("click", () => sendToEngineer(q.value));
     q.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(q.value); }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendToEngineer(q.value); }
     });
 
-    // --- PTT: MediaRecorder to /api/stt, else Web Speech API ---
+    // --- PTT: MediaRecorder to /api/stt, else Web Speech (one shot) ---
     let rec = null;
     let chunks = [];
     const ptt = document.getElementById("ptt");
@@ -140,6 +284,8 @@
     ptt.addEventListener("touchend", (e) => { e.preventDefault(); stopRec(); });
 
     async function startRec() {
+      if (contRec) { addSys("Stop continuous (browser) first."); return; }
+      if (wsStt) { addSys("Stop server STT stream first."); return; }
       if (rec && rec.state === "recording") return;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -173,25 +319,203 @@
         if (r.status === 501) { fallbackStt(); return; }
         if (!r.ok) { addSys("STT: " + (await r.text())); return; }
         const j = await r.json();
-        if (j.text) { q.value = j.text; sendChat(j.text); }
-      } catch (e) {
+        if (j.text) { q.value = j.text; void sendToEngineer(j.text); }
+      } catch {
         fallbackStt();
       }
     }
     function fallbackStt() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { addSys("No Web Speech; type your question or install faster-whisper for local STT."); return; }
+      if (!SR) { addSys("No Web Speech; type or install local STT for Whisper."); return; }
       const s = new SR();
       s.lang = "en-US";
       s.onresult = (e) => {
         const t = e.results[0] && e.results[0][0] && e.results[0][0].transcript;
-        if (t) { q.value = t; sendChat(t); }
+        if (t) { q.value = t; void sendToEngineer(t); }
       };
       s.onerror = () => addSys("Speech recognition error");
       s.start();
     }
 
-    addSys("Open this page at http://127.0.0.1:11734 (start start_engineer_voice.ps1). Ensure Ollama and Pits n' Giggles are running.");
+    // --- Continuous Web Speech (browser) ---
+    const contBtn = document.getElementById("cont-toggle");
+    contBtn.addEventListener("click", () => {
+      if (contRec) {
+        try { contRec.stop(); } catch { }
+        contRec = null;
+        contBtn.textContent = "Start continuous (browser)";
+        return;
+      }
+      if (wsStt) { addSys("Stop server STT first."); return; }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { addSys("No Web Speech API."); return; }
+      const s = new SR();
+      s.continuous = true;
+      s.interimResults = true;
+      s.lang = "en-US";
+      s.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) {
+            const t = (r[0] && r[0].transcript) ? r[0].transcript.trim() : "";
+            if (t) {
+              q.value = t;
+              void sendToEngineer(t);
+            }
+          } else if (r[0]) {
+            interim += r[0].transcript;
+          }
+        }
+        if (interim) q.value = interim;
+      };
+      s.onerror = (ev) => addSys("Browser STT: " + (ev && ev.error ? ev.error : "error"));
+      s.start();
+      contRec = s;
+      contBtn.textContent = "Stop continuous (browser)";
+    });
+
+    // --- WebSocket + Whisper partial STT ---
+    const wsGo = document.getElementById("ws-stt-go");
+    const wsEnd = document.getElementById("ws-stt-end");
+    const wsStop = document.getElementById("ws-stt-stop");
+
+    function closeWsStt() {
+      if (mediaStt) {
+        try { mediaStt.getTracks().forEach((t) => t.stop()); } catch { }
+        mediaStt = null;
+      }
+      if (procStt) {
+        try { procStt.disconnect(); } catch { }
+        procStt = null;
+      }
+      if (streamSrc) {
+        try { streamSrc.disconnect(); } catch { }
+        streamSrc = null;
+      }
+      if (muteNode) {
+        try { muteNode.disconnect(); } catch { }
+        muteNode = null;
+      }
+      if (acStt) {
+        acStt.close();
+        acStt = null;
+      }
+      if (wsStt) {
+        try { wsStt.close(); } catch { }
+        wsStt = null;
+      }
+      wsEnd.disabled = true;
+      wsStop.disabled = true;
+      wsGo.disabled = false;
+    }
+
+    function scheduleAutoSendStt() {
+      if (!document.getElementById("ws-autosend").checked) return;
+      if (sttDebounce) clearTimeout(sttDebounce);
+      sttDebounce = setTimeout(() => {
+        sttDebounce = null;
+        const t = (q.value || "").trim();
+        if (t) void sendToEngineer(t);
+      }, DE_MS);
+    }
+
+    wsGo.addEventListener("click", async () => {
+      if (contRec) { addSys("Stop browser continuous STT first."); return; }
+      if (wsStt) { addSys("Already running."); return; }
+      const ws = new WebSocket(wsUrl());
+      ws.binaryType = "arraybuffer";
+      try {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("WebSocket open timeout")), 5000);
+          ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+          ws.addEventListener("error", () => { clearTimeout(timer); reject(new Error("WebSocket error")); }, { once: true });
+        });
+      } catch (e) {
+        addSys((e && e.message) + " — /ws/stt (install requirements-optional-stt.txt and restart).");
+        try { ws.close(); } catch { }
+        return;
+      }
+      if (ws.readyState !== 1) {
+        addSys("WebSocket not open.");
+        try { ws.close(); } catch { }
+        return;
+      }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+      } catch (e) {
+        addSys("Mic: " + e);
+        try { ws.close(); } catch { }
+        return;
+      }
+      mediaStt = stream;
+      acStt = new (window.AudioContext || window.webkitAudioContext)();
+      const sr0 = acStt.sampleRate;
+      try {
+        ws.send(JSON.stringify({ type: "config", sample_rate: Math.round(sr0) }));
+      } catch (e) {
+        addSys("WS send: " + e);
+        try { stream.getTracks().forEach((t) => t.stop()); } catch { }
+        try { ws.close(); } catch { }
+        return;
+      }
+      streamSrc = acStt.createMediaStreamSource(stream);
+      const work = 4096;
+      procStt = acStt.createScriptProcessor(work, 1, 1);
+      procStt.onaudioprocess = (e) => {
+        if (ws.readyState !== 1) return;
+        const d = e.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(d.length);
+        copy.set(d);
+        ws.send(copy.buffer);
+      };
+      muteNode = acStt.createGain();
+      muteNode.gain.value = 0;
+      streamSrc.connect(procStt);
+      procStt.connect(muteNode);
+      muteNode.connect(acStt.destination);
+      wsStt = ws;
+      wsGo.disabled = true;
+      wsEnd.disabled = false;
+      wsStop.disabled = false;
+      ws.addEventListener("message", (ev) => {
+        let j;
+        try {
+          j = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (j.type === "stt" && j.text) {
+          q.value = j.text;
+          if (j.partial) {
+            scheduleAutoSendStt();
+          } else if (document.getElementById("ws-flush-send").checked) {
+            void sendToEngineer(j.text);
+          }
+        }
+      });
+      ws.addEventListener("close", () => {
+        addSys("Server STT WebSocket closed.");
+        closeWsStt();
+      });
+      addSys("Server STT stream on: speak; partial text updates the box. Use Flush phrase / Auto-send, or type Send.");
+    });
+
+    wsEnd.addEventListener("click", () => {
+      if (wsStt && wsStt.readyState === 1) {
+        try { wsStt.send(JSON.stringify({ type: "flush" })); } catch (e) { addSys("flush: " + e); }
+      }
+    });
+    wsStop.addEventListener("click", () => {
+      if (wsStt && wsStt.readyState === 1) {
+        try { wsStt.send(JSON.stringify({ type: "close" })); } catch { }
+        try { wsStt.close(); } catch { }
+      }
+      closeWsStt();
+    });
+
+    addSys("http://127.0.0.1:11734 — Ollama + (optional) Whisper. Enable “Ollama stream” for token streaming. Continuous uses browser STT; WebSocket path uses local Whisper on the PC.");
   </script>
 </body>
 </html>
