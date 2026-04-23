@@ -29,7 +29,7 @@ The integration transforms the local telemetry tool into a professional racing s
 
 The **game runs on Xbox**; **Pits n' Giggles** on the **Windows PC** receives UDP telemetry. This repo adds a **local** service so you can talk to an **Ollama** model with **`/race-info` + `/telemetry-info`** in the system prompt—no cloud LLM. Voice I/O is on the **PC** (headset). See `docs/CONSOLE_VOICE.md` for why “audio through the console only” is a separate path.
 
-1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1` (or set `OLLAMA_MODEL` to a model you have).
+1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1:8b` (default in `start_engineer_voice.ps1`; set `OLLAMA_MODEL` if you use another tag).
 2. **Start Pits n' Giggles** so the HTTP server is up on **4768** (telemetry from Xbox as you already do).
 3. **Start the engineer service:**  
    `.\start_engineer_voice.ps1`  

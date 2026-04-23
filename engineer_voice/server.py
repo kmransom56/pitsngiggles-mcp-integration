@@ -22,7 +22,7 @@ STATIC = APP_DIR / "static"
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://127.0.0.1:11434")
 PNG_BASE = os.environ.get("PNG_BASE", "http://127.0.0.1:4768")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 ENGINEER_PORT = int(os.environ.get("ENGINEER_VOICE_PORT", "11734"))
 
