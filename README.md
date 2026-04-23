@@ -38,8 +38,9 @@ The **game runs on Xbox**; **Pits n' Giggles** on the **Windows PC** receives UD
 
 1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1:8b` (default in `start_engineer_voice.ps1`; set `OLLAMA_MODEL` if you use another tag).
 2. **Start Pits n' Giggles** so the HTTP server is up on **4768** (telemetry from Xbox as you already do).
-3. **Start the engineer service:**  
+3. **Start the engineer service** (from the **repository root**):  
    `.\start_engineer_voice.ps1`  
+   Or, if your shell is already in `engineer_voice\`, use the same filename: `.\start_engineer_voice.ps1` (wrapper that calls the root script).  
    It listens on **http://127.0.0.1:11734** only (localhost). Open that URL in **Edge/Chrome** for the two-pane UI (engineering view + chat/PTT).
 4. **Optional: local STT** (faster transcribe, no browser):  
    `pip install -r engineer_voice/requirements-optional-stt.txt`  
