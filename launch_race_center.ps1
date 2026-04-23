@@ -35,6 +35,77 @@ function Set-EngineerVoiceEnv {
     if (-not $env:OLLAMA_MODEL) { $env:OLLAMA_MODEL = "llama3.1:8b" }
 }
 
+function Get-EngineerPythonExe {
+    if ($env:ENGINEER_PYTHON) {
+        $ep = $env:ENGINEER_PYTHON
+        if (Test-Path -LiteralPath $ep) { return (Resolve-Path -LiteralPath $ep).Path }
+        Write-Host "  ⚠️  ENGINEER_PYTHON is set but file not found: $ep" -ForegroundColor DarkYellow
+    }
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        $u = & uv python find 2>$null
+        if ($LASTEXITCODE -eq 0 -and $u) {
+            $p = $u | Select-Object -First 1
+            if (Test-Path -LiteralPath $p) { return $p.Trim() }
+        }
+    }
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        $tryVers = @("3.14", "3.13", "3.12", "3.11", "3.10")
+        foreach ($tv in $tryVers) {
+            $o = & py "-$tv" -c "import sys; print(sys.executable)" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $o -and ($o -notmatch "Error|not found|suitable")) {
+                $line = if ($o -is [array]) { $o[-1] } else { $o }
+                $cand = $line.ToString().Trim()
+                if (Test-Path -LiteralPath $cand) { return $cand }
+            }
+        }
+        $o3 = & py -3 -c "import sys; print(sys.executable)" 2>&1
+        if ($LASTEXITCODE -eq 0 -and $o3 -and ($o3 -notmatch "Error|not found|suitable")) {
+            $line = if ($o3 -is [array]) { $o3[-1] } else { $o3 }
+            $cand = $line.ToString().Trim()
+            if (Test-Path -LiteralPath $cand) { return $cand }
+        }
+    }
+    $w = @()
+    try { $w = & where.exe python 2>$null } catch { }
+    foreach ($cand in $w) {
+        $cand = $cand.Trim()
+        if (-not $cand) { continue }
+        if ($cand -match "WindowsApps") { continue }
+        if (-not (Test-Path -LiteralPath $cand)) { continue }
+        $vv = & $cand -c "import sys; v=sys.version_info; assert v>=(3,10); print(sys.executable)" 2>&1
+        if ($LASTEXITCODE -eq 0) { return $cand }
+    }
+    return $null
+}
+
+function New-EngineerVenv {
+    if (Test-Path -LiteralPath (Join-Path $ven "Scripts\python.exe")) { return }
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        Write-Host "  … Creating venv with uv…" -ForegroundColor DarkGray
+        $x = & uv venv $ven 2>&1
+        if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $ven "Scripts\python.exe"))) { return }
+    }
+    $base = Get-EngineerPythonExe
+    if ($base) {
+        Write-Host "  … Creating venv with: $base" -ForegroundColor DarkGray
+        & $base -m venv $ven
+        if ($LASTEXITCODE -ne 0) { throw "python -m venv failed (exit $LASTEXITCODE): $base" }
+        if (-not (Test-Path (Join-Path $ven "Scripts\python.exe"))) { throw "venv missing Scripts\python.exe after -m venv" }
+        return
+    }
+    throw @"
+No Python found for engineer_voice. The Windows 'py' launcher has no 3.10+ install, and 'python' was not usable.
+
+  Fix (pick one):
+  • Install Python 3.12+ from https://www.python.org/downloads/  (check **Install launcher** and **Add to PATH**).
+  • Or install Astral uv and a runtime:  winget install astral.uv  then:  uv python install 3.13
+  • Or set the full path to python.exe, then re-run:
+      `$env:ENGINEER_PYTHON = 'C:\Path\to\python.exe'`
+
+  To see what the launcher can run:  py -0
+"@
+}
+
 function Install-EngineerVoiceDeps {
     $oldEap = $ErrorActionPreference
     $ErrorActionPreference = "Stop"
@@ -42,21 +113,12 @@ function Install-EngineerVoiceDeps {
         if (-not (Test-Path -LiteralPath $req)) {
             throw "Missing $req"
         }
-        if (-not (Test-Path -LiteralPath $ven)) {
-            $created = $false
-            try {
-                & py -3.12 -m venv $ven
-                if ($LASTEXITCODE -eq 0) { $created = $true }
-            } catch { }
-            if (-not $created) {
-                try {
-                    & py -3 -m venv $ven
-                    if ($LASTEXITCODE -eq 0) { $created = $true }
-                } catch { }
+        if (-not (Test-Path -LiteralPath $ven) -or -not (Test-Path (Join-Path $ven "Scripts\python.exe"))) {
+            if (Test-Path -LiteralPath $ven) {
+                Write-Host "  … Removing broken engineer_voice venv" -ForegroundColor DarkYellow
+                Remove-Item -LiteralPath $ven -Recurse -Force -ErrorAction SilentlyContinue
             }
-            if (-not $created) {
-                & python -m venv $ven
-            }
+            New-EngineerVenv
         }
         $py = Join-Path $ven "Scripts\python.exe"
         if (-not (Test-Path -LiteralPath $py)) {
