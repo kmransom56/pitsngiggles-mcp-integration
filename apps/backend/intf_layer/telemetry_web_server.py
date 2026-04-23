@@ -23,15 +23,18 @@
 # -------------------------------------- IMPORTS -----------------------------------------------------------------------
 
 import logging
+import os
 import webbrowser
 from http import HTTPStatus
 from typing import Any, Dict, Tuple
 
 from apps.backend.state_mgmt_layer import SessionState
-from apps.backend.state_mgmt_layer.intf import (DriverInfoRsp,
-                                                PeriodicUpdateData,
-                                                RaceInfoData,
-                                                StreamOverlayData)
+from apps.backend.state_mgmt_layer.intf import (
+    DriverInfoRsp,
+    PeriodicUpdateData,
+    RaceInfoData,
+    StreamOverlayData,
+)
 from lib.child_proc_mgmt import notify_parent_init_complete
 from lib.config import PngSettings
 from lib.mcp_server import MCPServer
@@ -40,6 +43,7 @@ from lib.web_server import BaseWebServer, ClientType
 # -------------------------------------- GLOBALS -----------------------------------------------------------------------
 
 # -------------------------------------- CLASS DEFINITIONS -------------------------------------------------------------
+
 
 class TelemetryWebServer(BaseWebServer):
     """
@@ -58,12 +62,14 @@ class TelemetryWebServer(BaseWebServer):
         m_logger (logging.Logger): The logger instance.
     """
 
-    def __init__(self,
-                 settings: PngSettings,
-                 ver_str: str,
-                 logger: logging.Logger,
-                 session_state: SessionState,
-                 debug_mode: bool = False):
+    def __init__(
+        self,
+        settings: PngSettings,
+        ver_str: str,
+        logger: logging.Logger,
+        session_state: SessionState,
+        debug_mode: bool = False,
+    ):
         """
         Initialize the TelemetryWebServer.
 
@@ -79,24 +85,55 @@ class TelemetryWebServer(BaseWebServer):
             ver_str=ver_str,
             logger=logger,
             client_event_mappings={
-                ClientType.RACE_TABLE: ['frontend-update', 'race-table-update'],
+                ClientType.RACE_TABLE: ["frontend-update", "race-table-update"],
                 ClientType.HUD: [
-                    'hud-toggle-notification',
-                    'hud-cycle-mfd-notification',
-                    'hud-prev-page-mfd-notification',
-                    'hud-mfd-interaction-notification',
+                    "hud-toggle-notification",
+                    "hud-cycle-mfd-notification",
+                    "hud-prev-page-mfd-notification",
+                    "hud-mfd-interaction-notification",
                 ],
-                ClientType.PLAYER_STREAM_OVERLAY: ['stream-overlay-update'],
+                ClientType.PLAYER_STREAM_OVERLAY: ["stream-overlay-update"],
             },
             cert_path=settings.HTTPS.cert_path,
             key_path=settings.HTTPS.key_path,
-            debug_mode=debug_mode)
+            debug_mode=debug_mode,
+        )
         self.define_routes()
         self.register_post_start_callback(self._post_start)
         self.m_show_start_sample_data = settings.StreamOverlay.show_sample_data_at_start
         self.m_session_state: SessionState = session_state
         self.m_disable_browser_autoload = settings.Display.disable_browser_autoload
         self.m_mcp_server = MCPServer(session_state, logger)
+        self.m_race_engineer_mounted: bool = False
+        self._try_mount_race_engineer()
+
+    def _try_mount_race_engineer(self) -> None:
+        """LAN race engineer (FastAPI) at ``/race-engineer`` on the same port as this server."""
+        if os.environ.get("RACE_ENGINEER_DISABLE_MOUNT", "").strip() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return
+        try:
+            from lib.asgi_prefix_mount import asgi_mount_at_prefix
+            from engineer_voice.server import app as _race_engineer_asgi
+        except ImportError as exc:
+            self.m_logger.info("LAN race engineer not mounted: %s", exc)
+            return
+        if not os.environ.get("PNG_BASE", "").strip():
+            proto = "https" if self.m_cert_path else "http"
+            os.environ["PNG_BASE"] = f"{proto}://127.0.0.1:{self.m_port}"
+        self.m_sio_app = asgi_mount_at_prefix(
+            self.m_sio_app,
+            "/race-engineer",
+            _race_engineer_asgi,
+        )
+        self.m_race_engineer_mounted = True
+        self.m_logger.info(
+            "LAN Race Engineer: http://127.0.0.1:%s/race-engineer/ (Ollama + voice, same app)",
+            self.m_port,
+        )
 
     def define_routes(self) -> None:
         """
@@ -115,7 +152,8 @@ class TelemetryWebServer(BaseWebServer):
 
         Sets up routes for the main index page and stream overlay page.
         """
-        @self.http_route('/')
+
+        @self.http_route("/")
         async def index() -> str:
             """
             Render the main index page.
@@ -123,9 +161,11 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 str: Rendered HTML content for the index page.
             """
-            return await self.render_template('driver-view.html', live_data_mode=True, version=self.m_ver_str)
+            return await self.render_template(
+                "driver-view.html", live_data_mode=True, version=self.m_ver_str
+            )
 
-        @self.http_route('/eng-view')
+        @self.http_route("/eng-view")
         async def engineerView() -> str:
             """
             Render the engineer view page.
@@ -133,9 +173,11 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 str: Rendered HTML content for the stream overlay page.
             """
-            return await self.render_template('eng-view.html', live_data_mode=True, version=self.m_ver_str)
+            return await self.render_template(
+                "eng-view.html", live_data_mode=True, version=self.m_ver_str
+            )
 
-        @self.http_route('/player-stream-overlay')
+        @self.http_route("/player-stream-overlay")
         async def playerStreamOverlay() -> str:
             """
             Render the player stream overlay page.
@@ -143,9 +185,9 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 str: Rendered HTML content for the stream overlay page.
             """
-            return await self.render_template('player-stream-overlay.html')
+            return await self.render_template("player-stream-overlay.html")
 
-        @self.http_route('/strategy-center')
+        @self.http_route("/strategy-center")
         async def strategyCenter() -> str:
             """
             Render the AI-powered strategy center page.
@@ -153,7 +195,7 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 str: Rendered HTML content for the strategy center.
             """
-            return await self.render_template('strategy-center.html')
+            return await self.render_template("strategy-center.html")
 
     def _defineDataRoutes(self) -> None:
         """
@@ -162,7 +204,8 @@ class TelemetryWebServer(BaseWebServer):
         Sets up endpoints for fetching race info, telemetry info,
         driver info, and stream overlay info.
         """
-        @self.http_route('/telemetry-info')
+
+        @self.http_route("/telemetry-info")
         async def telemetryInfoHTTP() -> Tuple[str, int]:
             """
             Provide telemetry information via HTTP.
@@ -172,7 +215,7 @@ class TelemetryWebServer(BaseWebServer):
             """
             return PeriodicUpdateData(self.m_session_state).toJSON(), HTTPStatus.OK
 
-        @self.http_route('/race-info')
+        @self.http_route("/race-info")
         async def raceInfoHTTP() -> Tuple[str, int]:
             """
             Provide overall race statistics via HTTP.
@@ -182,7 +225,7 @@ class TelemetryWebServer(BaseWebServer):
             """
             return RaceInfoData(self.m_session_state).toJSON(), HTTPStatus.OK
 
-        @self.http_route('/driver-info')
+        @self.http_route("/driver-info")
         async def driverInfoHTTP() -> Tuple[str, int]:
             """
             Provide driver information based on the index parameter.
@@ -190,9 +233,9 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 Tuple[str, int]: JSON response and HTTP status code.
             """
-            return self._processDriverInfoRequest(self.request.args.get('index'))
+            return self._processDriverInfoRequest(self.request.args.get("index"))
 
-        @self.http_route('/stream-overlay-info')
+        @self.http_route("/stream-overlay-info")
         async def streamOverlayInfoHTTP() -> Tuple[str, int]:
             """
             Provide stream overlay telemetry information via HTTP.
@@ -200,9 +243,16 @@ class TelemetryWebServer(BaseWebServer):
             Returns:
                 Tuple[str, int]: JSON response and HTTP status code.
             """
-            return StreamOverlayData(self.m_session_state).toJSON(self.m_show_start_sample_data), HTTPStatus.OK
+            return (
+                StreamOverlayData(self.m_session_state).toJSON(
+                    self.m_show_start_sample_data
+                ),
+                HTTPStatus.OK,
+            )
 
-    def _processDriverInfoRequest(self, index_arg: Any) -> Tuple[Dict[str, Any], HTTPStatus]:
+    def _processDriverInfoRequest(
+        self, index_arg: Any
+    ) -> Tuple[Dict[str, Any], HTTPStatus]:
         """
         Process driver info request.
 
@@ -214,16 +264,16 @@ class TelemetryWebServer(BaseWebServer):
         """
 
         # Validate the input
-        if error_response := self.validate_int_get_request_param(index_arg, 'index'):
+        if error_response := self.validate_int_get_request_param(index_arg, "index"):
             return error_response, HTTPStatus.BAD_REQUEST
 
         # Check if the given index is valid
         index_int = int(index_arg)
         if not self.m_session_state.isIndexValid(index_int):
             error_response = {
-                'error' : 'Invalid parameter value',
-                'message' : 'Invalid index',
-                'index' : index_arg
+                "error": "Invalid parameter value",
+                "message": "Invalid index",
+                "index": index_arg,
             }
             return self.jsonify(error_response), HTTPStatus.NOT_FOUND
 
@@ -233,46 +283,48 @@ class TelemetryWebServer(BaseWebServer):
     def _defineMCPRoutes(self) -> None:
         """
         Define Model Context Protocol (MCP) routes for AI tool integration.
-        
+
         Sets up Server-Sent Events endpoint for ChatGPT, Claude, Cursor, etc.
         """
-        @self.http_route('/mcp')
+
+        @self.http_route("/mcp")
         async def mcpEndpoint():
             """
             MCP Server-Sent Events endpoint for AI tools.
-            
+
             Provides real-time telemetry data access to AI assistants using
             the Model Context Protocol over SSE.
             """
             from quart import Response
-            
+
             async def generate():
                 async for event in self.m_mcp_server.stream_events():
                     yield event
-            
+
             return Response(
                 generate(),
-                mimetype='text/event-stream',
+                mimetype="text/event-stream",
                 headers={
-                    'Cache-Control': 'no-cache',
-                    'X-Accel-Buffering': 'no',
-                    'Connection': 'keep-alive',
-                    'Access-Control-Allow-Origin': '*',
-                }
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                },
             )
-        
-        @self.http_route('/mcp/tools', methods=['POST'])
+
+        @self.http_route("/mcp/tools", methods=["POST"])
         async def mcpToolsEndpoint():
             """
             Handle MCP tool invocation requests.
-            
+
             Allows AI tools to call specific telemetry functions via POST.
             """
             import json
+
             data = await self.request.get_json()
-            method = data.get('method', 'tools/list')
-            params = data.get('params', {})
-            
+            method = data.get("method", "tools/list")
+            params = data.get("params", {})
+
             result = await self.m_mcp_server.handle_request(method, params)
             return self.jsonify(result), HTTPStatus.OK
 
@@ -280,5 +332,6 @@ class TelemetryWebServer(BaseWebServer):
         """Function to be called after the server starts serving."""
         notify_parent_init_complete()
         if not self.m_disable_browser_autoload:
-            proto = 'https' if self.m_cert_path else 'http'
-            webbrowser.open(f'{proto}://localhost:{self.m_port}', new=2)
+            proto = "https" if self.m_cert_path else "http"
+            path = "/race-engineer/" if self.m_race_engineer_mounted else "/"
+            webbrowser.open(f"{proto}://localhost:{self.m_port}{path}", new=2)

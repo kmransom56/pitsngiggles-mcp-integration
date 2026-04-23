@@ -30,22 +30,17 @@ The integration transforms the local telemetry tool into a professional racing s
 ## 🐍 Python, Poetry, and building
 
 - The **Pits n’ Giggles** application and Windows executable build are documented with **[Poetry](https://python-poetry.org/)** (`poetry install`, `poetry run …`). The repo is **not** a “uv-only” setup; `uv` or a manual venv is an optional alternative—see **[docs/PYTHON_ENVIRONMENT.md](docs/PYTHON_ENVIRONMENT.md)**.
-- The **`engineer_voice`** stack uses a **dedicated** virtual environment at `engineer_voice\.venv` and **`pip`**, as created by `start_engineer_voice.ps1` / `launch_race_center.ps1` (not the same venv as Poetry for the main app).
+- The **LAN race engineer** UI is **mounted inside the main Pits n’ Giggles HTTP server** at **`/race-engineer/`** (same port as telemetry, usually **4768**). Optional **standalone** dev server on **11734** is still available with `$env:RACE_ENGINEER_STANDALONE = "1"` when running `launch_race_center.ps1` / `start_engineer_voice.ps1`. Optional **faster-whisper** STT can be installed into the **same** Poetry/venv you use for the app (`pip install -r engineer_voice/requirements-optional-stt.txt`) or a separate `engineer_voice\.venv` for legacy flows.
 
 ## 🎙️ LAN race engineer (Windows PC: Ollama + telemetry, Xbox feeds UDP only)
 
-The **game runs on Xbox**; **Pits n' Giggles** on the **Windows PC** receives UDP telemetry. This repo adds a **local** service so you can talk to an **Ollama** model with **`/race-info` + `/telemetry-info`** in the system prompt—no cloud LLM. Voice I/O is on the **PC** (headset). See `docs/CONSOLE_VOICE.md` for why “audio through the console only” is a separate path.
+The **game runs on Xbox**; **Pits n' Giggles** on the **Windows PC** receives UDP telemetry. This repo adds a **local** Ollama-backed UI with **`/race-info` + `/telemetry-info`** in the system prompt—no cloud LLM. Voice I/O is on the **PC** (headset). See `docs/CONSOLE_VOICE.md` for why “audio through the console only” is a separate path.
 
-1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1:8b` (default in `start_engineer_voice.ps1`; set `OLLAMA_MODEL` if you use another tag).
-2. **Start Pits n' Giggles** so the HTTP server is up on **4768** (telemetry from Xbox as you already do).
-3. **Start the engineer service** (from the **repository root**):  
-   `.\start_engineer_voice.ps1`  
-   Or, if your shell is already in `engineer_voice\`, use the same filename: `.\start_engineer_voice.ps1` (wrapper that calls the root script).  
-   It listens on **http://127.0.0.1:11734** only (localhost). Open that URL in **Edge/Chrome** for the two-pane UI (engineering view + chat/PTT).
-4. **Optional: local STT** (faster transcribe, no browser):  
-   `pip install -r engineer_voice/requirements-optional-stt.txt`  
-   (re-run `start_engineer_voice.ps1`). **ffmpeg** in `PATH` helps for **webm** clips. If STT is off, the page falls back to **Web Speech API** for dictation.
-5. **Env overrides:** `OLLAMA_BASE`, `PNG_BASE` (default `http://127.0.0.1:4768`), `OLLAMA_MODEL`, `ENGINEER_VOICE_PORT` (default `11734`).
+1. **Install and run [Ollama](https://ollama.com/)** on the PC, e.g. `ollama pull llama3.1:8b` (set `OLLAMA_MODEL` if you use another tag).
+2. **Start Pits n' Giggles** so the HTTP server is up (default **4768**).
+3. **Open the unified page** (same app as telemetry): **`http://127.0.0.1:<port>/race-engineer/`** — the app auto-opens this when the engineer module mounts, or run **`.\start_engineer_voice.ps1`** from the repo root to open it in your browser (requires PNG already running). From `engineer_voice\`, **`.\start_engineer_voice.ps1`** is a thin wrapper to the root script.
+4. **Optional: local STT** (faster transcribe, no browser): install into the **app’s** Python environment, e.g. `poetry run pip install -r engineer_voice/requirements-optional-stt.txt` (or your venv’s `pip`). **ffmpeg** in `PATH` helps for **webm** clips. If STT is off, the page falls back to **Web Speech API** for dictation.
+5. **Env overrides:** `OLLAMA_BASE`, `PNG_BASE` (set automatically when mounted; override if needed), `OLLAMA_MODEL`, `ENGINEER_VOICE_PORT` (standalone only, default **11734**). Disable in-process mount: **`RACE_ENGINEER_DISABLE_MOUNT=1`**.
 
 ## 🛠️ Quick Setup (WSL / Ubuntu)
 

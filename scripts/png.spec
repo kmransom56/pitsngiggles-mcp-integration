@@ -94,7 +94,8 @@ hiddenimports = (
     collect_submodules("apps.backend") +
     collect_submodules("apps.save_viewer") +
     collect_submodules("apps.hud") +
-    collect_submodules("apps.broker")
+    collect_submodules("apps.broker") +
+    collect_submodules("engineer_voice")
 )
 
 # Automatically collect all assets and frontend files
@@ -104,6 +105,9 @@ datas = []
 datas.extend(collect_directory("apps/frontend/css", "apps/frontend/css"))
 datas.extend(collect_directory("apps/frontend/html", "apps/frontend/html"))
 datas.extend(collect_directory("apps/frontend/js", "apps/frontend/js"))
+
+# LAN race engineer (FastAPI UI + optional Whisper)
+datas.extend(collect_directory("engineer_voice/static", "engineer_voice/static"))
 
 # All assets (icons, images, fonts, etc.)
 datas.extend(collect_directory("assets", "assets"))

@@ -40,11 +40,11 @@
 <body>
   <header>
     <h1>LAN Race Engineer (Ollama + PNG telemetry)</h1>
-    <div class="row">Telemetry: <code id="png-url">http://127.0.0.1:4768/eng-view</code></div>
+    <div class="row">Engineering view: <code id="png-url">—</code></div>
   </header>
   <div class="main">
     <div class="frame-wrap">
-      <iframe id="tel" title="Engineering view" src="http://127.0.0.1:4768/eng-view"></iframe>
+      <iframe id="tel" title="Engineering view" src="about:blank"></iframe>
     </div>
     <div class="panel">
       <div class="health" id="health">Checking services…</div>
@@ -86,8 +86,27 @@
     const log = document.getElementById("log");
     const healthEl = document.getElementById("health");
     const q = document.getElementById("q");
-    const API = () => window.location.origin;
-    const wsUrl = () => (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws/stt";
+    function appPathPrefix() {
+      const path = location.pathname || "";
+      return path.indexOf("/race-engineer") === 0 ? "/race-engineer" : "";
+    }
+    const API = () => window.location.origin + appPathPrefix();
+    const wsUrl = () =>
+      (location.protocol === "https:" ? "wss" : "ws") +
+      "://" + location.host + appPathPrefix() + "/ws/stt";
+    function engViewIframeSrc() {
+      if (appPathPrefix()) {
+        return "/eng-view";
+      }
+      return "http://127.0.0.1:4768/eng-view";
+    }
+    (function initEngFrame() {
+      const p = engViewIframeSrc();
+      const tel = document.getElementById("tel");
+      const u = document.getElementById("png-url");
+      tel.setAttribute("src", p);
+      u.textContent = p;
+    })();
 
     let contRec = null;
     let wsStt = null;
@@ -515,7 +534,7 @@
       closeWsStt();
     });
 
-    addSys("http://127.0.0.1:11734 — Ollama + (optional) Whisper. Enable “Ollama stream” for token streaming. Continuous uses browser STT; WebSocket path uses local Whisper on the PC.");
+    addSys("Ollama + (optional) Whisper. If this URL is under /race-engineer/, telemetry is same app. Otherwise use port 4768 for eng-view. Enable Ollama stream for NDJSON; WebSocket STT needs faster-whisper.");
   </script>
 </body>
 </html>

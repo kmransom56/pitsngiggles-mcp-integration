@@ -1,8 +1,9 @@
 ﻿# ═══════════════════════════════════════════════════════════
 # 🏎️ Pits N' Giggles — Race Strategy Center + LAN Race Engineer
 # ═══════════════════════════════════════════════════════════
-# Starts Pits N' Giggles (telemetry), the LAN race engineer
-# (Ollama + voice UI on 11734), ensures Nginx in WSL, opens Strategy Center.
+# Starts Pits N' Giggles (telemetry + LAN race engineer at /race-engineer/ on
+# the same HTTP port). Optional standalone engineer on 11734: set
+# RACE_ENGINEER_STANDALONE=1. Ensures Nginx in WSL, opens Strategy Center.
 #
 #   Full stack (default):     .\launch_race_center.ps1
 #   Engineer voice only:      .\launch_race_center.ps1 -EngineerVoiceOnly
@@ -255,16 +256,21 @@ if ($pngRunning) {
     }
 }
 
-# ── Step 2: LAN Race Engineer (Ollama + voice UI)
+# ── Step 2: LAN Race Engineer (built into Pits n' Giggles HTTP on /race-engineer/)
 if ($SkipEngineerVoice) {
     Write-Host "  ⏭️  Skipping LAN Race Engineer (-SkipEngineerVoice)" -ForegroundColor DarkGray
-} else {
-    Write-Host "  🎙️ Starting LAN Race Engineer (background)..." -ForegroundColor Yellow
+} elseif ($env:RACE_ENGINEER_STANDALONE -eq "1") {
+    Write-Host "  🎙️ RACE_ENGINEER_STANDALONE=1 — starting separate engineer on port $EngineerPort..." -ForegroundColor Yellow
     try {
         Start-EngineerVoiceProcess -RunInForeground $false
     } catch {
         Write-Host "  ⚠️  Could not start LAN Race Engineer: $($_.Exception.Message)" -ForegroundColor DarkYellow
-        Write-Host "     Voice UI: http://127.0.0.1:$EngineerPort/ — fix deps or use -SkipEngineerVoice" -ForegroundColor DarkGray
+        Write-Host "     Voice UI: http://127.0.0.1:$EngineerPort/" -ForegroundColor DarkGray
+    }
+} else {
+    Write-Host "  🎙️ LAN Race Engineer is inside Pits n' Giggles: http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor Green
+    if (Test-LocalPort -Port $TelemetryPort) {
+        Start-Process "http://127.0.0.1:$TelemetryPort/race-engineer/"
     }
 }
 
@@ -312,7 +318,11 @@ Write-Host "  ══════════════════════
 Write-Host "  Race Strategy Center is ready! 🏁🏎️💨" -ForegroundColor Green
 Write-Host "  Telemetry:    http://localhost:$TelemetryPort" -ForegroundColor DarkGray
 if (-not $SkipEngineerVoice) {
-    Write-Host "  Race engineer: http://127.0.0.1:$EngineerPort/  (Ollama + voice)" -ForegroundColor DarkGray
+    if ($env:RACE_ENGINEER_STANDALONE -eq "1") {
+        Write-Host "  Race engineer (standalone): http://127.0.0.1:$EngineerPort/" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Race engineer (same app):    http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor DarkGray
+    }
 }
 Write-Host "  Dashboard:    $StrategyURL" -ForegroundColor DarkGray
 Write-Host "  MCP (SSE):    $($StrategyURL.TrimEnd('/'))/mcp  (ChatGPT / Cursor)" -ForegroundColor DarkGray

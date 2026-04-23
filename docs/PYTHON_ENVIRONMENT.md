@@ -28,11 +28,12 @@ If you prefer not to use Poetry, you can still use a normal **venv** and **`pip`
 
 ## LAN race engineer (`engineer_voice/`)
 
-The **engineer voice** service is a **separate** small app with its own `engineer_voice/requirements.txt` (and optional `requirements-optional-stt.txt`).
+The **race engineer** UI and APIs live under **`/race-engineer/`** on the **same HTTP port** as Pits n’ Giggles (mounted from `engineer_voice/` into the Quart server). Optional **standalone** mode still uses **`engineer_voice/requirements.txt`** and a **`engineer_voice\.venv`** when you set **`RACE_ENGINEER_STANDALONE=1`** and run the launch scripts (separate Uvicorn on **11734**).
 
-- `start_engineer_voice.ps1` / `launch_race_center.ps1` create or reuse **`engineer_voice\.venv`** and install with **`pip`**, not Poetry (by design, so the stack is self-contained next to the integration scripts).
+- **Default:** `.\start_engineer_voice.ps1` only **opens the browser** to `http://127.0.0.1:4768/race-engineer/` (override port with **`PNG_HTTP_PORT`**). Install **FastAPI/httpx** deps via **Poetry** with the main app.
+- **Standalone dev:** `$env:RACE_ENGINEER_STANDALONE = "1"; .\start_engineer_voice.ps1` — creates **`engineer_voice\.venv`** with **`pip`** (see `launch_race_center.ps1` helpers), not Poetry.
 - **If the Windows `py` launcher reports “No suitable Python runtime”** (often when only a non-default install exists), set **`ENGINEER_PYTHON`** to the full path of a **Python 3.10+** `python.exe`, or install Python from [python.org](https://www.python.org/downloads/) with the **launcher** and **PATH** options, or install **[uv](https://docs.astral.sh/uv/)** and run `uv python install 3.13` so `uv venv` can create the venv. Run **`py -0`** in a terminal to see registered runtimes. **Astral/uv** installs show as e.g. `-V:Astral/CPython3.13.11`; the launch script tries those tags after `py -3.xx`. To pick one first: `$env:ENGINEER_PY_TAG = '-V:Astral/CPython3.13.11'`.
-- To run it manually: create a venv under `engineer_voice/`, `pip install -r requirements.txt`, then `uvicorn server:app` (see that folder’s `server.py` and `RUNNING` notes in the [README](../README.md)).
+- **Standalone manual run:** create a venv under `engineer_voice/`, `pip install -r requirements.txt`, then from that folder `uvicorn server:app --host 127.0.0.1 --port 11734` (see `server.py` and the [README](../README.md)).
 
 ## Summary
 
@@ -40,7 +41,8 @@ The **engineer voice** service is a **separate** small app with its own `enginee
 |------|--------|
 | Main Pits n’ Giggles app (launcher, backend, PyInstaller build) | **Poetry** (documented) |
 | Optional: same deps without Poetry | **venv** + **pip** or **uv** to manage Python/venv; align deps with `pyproject.toml` |
-| `engineer_voice` HTTP service | **Dedicated venv** in `engineer_voice\.venv` + **pip** (as driven by the PowerShell scripts) |
+| `engineer_voice` mounted at `/race-engineer/` | Same Python env as the main app; **FastAPI/httpx** from `pyproject.toml` |
+| `engineer_voice` standalone (`RACE_ENGINEER_STANDALONE=1`) | **Dedicated venv** in `engineer_voice\.venv` + **pip** (PowerShell launch scripts) |
 
 If anything in the docs still says to use only `uv` for the main app, treat **Poetry** as the source of truth unless you are deliberately using an alternative venv as above.
 
