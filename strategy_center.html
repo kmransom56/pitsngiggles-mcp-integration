@@ -421,7 +421,7 @@
                     <button class="copy-btn" id="copy-mcp-url">Copy URL</button>
                 </div>
                 <div class="mcp-url-row">
-                    <code id="mcp-url-display">https://mcp.netintegrate.net:8443/mcp</code>
+                    <code id="mcp-url-display">https://f1-race-engineer.netintegrate.net:8443/f1-race-engineer-lan</code>
                 </div>
             </div>
 
@@ -478,7 +478,7 @@
     </div>
 
     <script>
-        const MCP_SSE_URL = `${window.location.origin}/mcp`;
+        const MCP_SSE_URL = `${window.location.origin}/f1-race-engineer-lan`;
         document.getElementById('mcp-url-display').textContent = MCP_SSE_URL;
 
         document.getElementById('copy-mcp-url').addEventListener('click', async () => {

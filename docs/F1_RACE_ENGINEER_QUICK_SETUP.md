@@ -162,7 +162,7 @@ Add to `.continue/config.json`:
     {
       "name": "mcp",
       "params": {
-        "serverUrl": "https://localhost:8443/mcp"
+        "serverUrl": "https://f1-race-engineer.netintegrate.net:8443/f1-race-engineer-lan"
       }
     }
   ]

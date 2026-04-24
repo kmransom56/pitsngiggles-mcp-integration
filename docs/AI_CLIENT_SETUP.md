@@ -2,7 +2,7 @@
 
 Complete guide for connecting various AI tools to the Pits n' Giggles MCP server.
 
-**MCP Endpoint:** `https://localhost:8443/mcp` (or your server URL)
+**MCP endpoint (canonical):** `https://localhost:8443/f1-race-engineer-lan` — the shorter **`/mcp`** path is still supported for old configs. Use server name **`f1-race-engineer-lan`** in client lists. Your server URL may differ if not local.
 
 ---
 
@@ -40,7 +40,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
    - Go to **Apps** → **Create New App**
    - Fill in:
      - **Name:** `Pits n' Giggles Race Engineer`
-     - **App URL:** `https://localhost:8443/mcp`
+     - **App URL:** `https://localhost:8443/f1-race-engineer-lan`
      - **Transport Type:** `SSE`
 
 3. **Connect**
@@ -76,7 +76,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
    - Configure:
      - **Name:** `Pits n' Giggles Telemetry`
      - **Type:** `SSE`
-     - **URL:** `https://localhost:8443/mcp`
+     - **URL:** `https://localhost:8443/f1-race-engineer-lan`
 
 3. **Activate**
    - Toggle server to **Active**
@@ -120,7 +120,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
          "args": [
            "-y",
            "mcp-remote",
-           "https://localhost:8443/mcp"
+           "https://localhost:8443/f1-race-engineer-lan"
          ]
        }
      }
@@ -166,7 +166,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
      "mcpServers": {
        "Pits_N_Giggles": {
          "type": "sse",
-         "url": "https://localhost:8443/mcp"
+         "url": "https://localhost:8443/f1-race-engineer-lan"
        }
      }
    }
@@ -204,9 +204,9 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
    {
      "contextProviders": [
        {
-         "name": "mcp",
+         "name": "f1-race-engineer-lan",
          "params": {
-           "serverUrl": "https://localhost:8443/mcp",
+           "serverUrl": "https://localhost:8443/f1-race-engineer-lan",
            "transport": "sse"
          }
        }
@@ -238,7 +238,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
      ```json
      {
        "name": "Pits n' Giggles",
-       "url": "https://localhost:8443/mcp",
+       "url": "https://localhost:8443/f1-race-engineer-lan",
        "type": "sse"
      }
      ```
@@ -273,7 +273,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
      "assistant": {
        "mcp_servers": {
          "pitsngiggles": {
-           "url": "https://localhost:8443/mcp",
+           "url": "https://localhost:8443/f1-race-engineer-lan",
            "transport": "sse"
          }
        }
@@ -310,7 +310,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
    
    def get_race_info():
        response = requests.post(
-           'https://localhost:8443/mcp/tools',
+           'https://localhost:8443/f1-race-engineer-lan/tools',
            json={'method': 'tools/call', 'params': {
                'name': 'get_race_info', 'arguments': {}
            }},
@@ -356,7 +356,7 @@ Complete guide for connecting various AI tools to the Pits n' Giggles MCP server
      description: 'Get F1 telemetry race info',
      execute: async () => {
        const { data } = await axios.post(
-         'https://localhost:8443/mcp/tools',
+         'https://localhost:8443/f1-race-engineer-lan/tools',
          {
            method: 'tools/call',
            params: { name: 'get_race_info', arguments: {} }
@@ -437,13 +437,13 @@ For any tool not listed, use the MCP endpoints directly:
 
 ```javascript
 // List tools
-POST https://localhost:8443/mcp/tools
+POST https://localhost:8443/f1-race-engineer-lan/tools
 {
   "method": "tools/list"
 }
 
 // Call tool
-POST https://localhost:8443/mcp/tools
+POST https://localhost:8443/f1-race-engineer-lan/tools
 {
   "method": "tools/call",
   "params": {
@@ -511,11 +511,11 @@ POST https://localhost:8443/mcp/tools
 ### "Connection refused"
 - Ensure Nginx is running: `sudo systemctl status nginx`
 - Check Pits n' Giggles is running
-- Verify endpoint: `curl -N https://localhost:8443/mcp`
+- Verify endpoint: `curl -N https://localhost:8443/f1-race-engineer-lan`
 
 ### "Certificate error"
 - Trust self-signed cert (see [MCP Integration](MCP_INTEGRATION.md#self-signed-certificate-trust))
-- Or use HTTP: `http://localhost:4768/mcp`
+- Or use HTTP: `http://localhost:4768/f1-race-engineer-lan`
 
 ### "No tools available"
 - Check `/mcp/tools` endpoint works

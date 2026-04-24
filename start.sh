@@ -111,6 +111,25 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
 
+    location /f1-race-engineer-lan {
+        proxy_pass http://127.0.0.1:4768/f1-race-engineer-lan;
+        proxy_http_version 1.1;
+        
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS';
+        add_header Access-Control-Allow-Headers 'Content-Type, Authorization';
+    }
+
     location /mcp {
         proxy_pass http://127.0.0.1:4768/mcp;
         proxy_http_version 1.1;
@@ -214,17 +233,17 @@ else
     echo -e "${RED}✗${NC} HTTP telemetry server not responding"
 fi
 
-# Check MCP endpoint (HTTP)
-if curl -s http://localhost:4768/mcp > /dev/null 2>&1; then
-    echo -e "${GREEN}✓${NC} MCP server (HTTP): http://localhost:4768/mcp"
+# Check MCP endpoint (HTTP) — canonical path
+if curl -s http://localhost:4768/f1-race-engineer-lan > /dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} MCP server (HTTP): http://localhost:4768/f1-race-engineer-lan (legacy: /mcp)"
 else
     echo -e "${YELLOW}⚠${NC} MCP server (HTTP) not responding yet"
 fi
 
 # Check MCP endpoint (HTTPS via nginx)
 if [ "$NGINX_AVAILABLE" = true ]; then
-    if curl -k -s https://localhost:8443/mcp > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} MCP server (HTTPS): https://localhost:8443/mcp"
+    if curl -k -s https://localhost:8443/f1-race-engineer-lan > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} MCP server (HTTPS): https://localhost:8443/f1-race-engineer-lan"
     else
         echo -e "${YELLOW}⚠${NC} MCP server (HTTPS) not responding"
     fi
@@ -242,16 +261,16 @@ echo "  • F1 Race Engineer:     http://localhost:4768/strategy-center"
 echo ""
 echo "🤖 AI Integration:"
 if [ "$NGINX_AVAILABLE" = true ]; then
-    echo "  • MCP Endpoint (HTTPS): https://localhost:8443/mcp"
-    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/mcp"
+    echo "  • MCP Endpoint (HTTPS): https://localhost:8443/f1-race-engineer-lan (legacy: /mcp)"
+    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/f1-race-engineer-lan"
 else
-    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/mcp"
+    echo "  • MCP Endpoint (HTTP):  http://localhost:4768/f1-race-engineer-lan"
 fi
 echo ""
 echo "📚 Quick Setup:"
-echo "  • ChatGPT Desktop:  Settings → Apps → Create New App → URL: https://localhost:8443/mcp"
+echo "  • ChatGPT Desktop:  Settings → Apps → Create New App → URL: https://localhost:8443/f1-race-engineer-lan"
 echo "  • Claude Desktop:   See docs/AI_CLIENT_SETUP.md"
-echo "  • Cursor IDE:       Settings → MCP → Add Server → URL: https://localhost:8443/mcp"
+echo "  • Cursor IDE:       Settings → MCP → Add Server → name f1-race-engineer-lan → URL: https://localhost:8443/f1-race-engineer-lan"
 echo ""
 echo "📊 Available MCP Tools (10):"
 echo "  • get_race_info - Current race status"

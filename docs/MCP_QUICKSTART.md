@@ -15,7 +15,7 @@ cd pits-n-giggles/deployment/scripts
 sudo ./setup-nginx.sh
 ```
 
-This creates an HTTPS endpoint at: `https://localhost:8443/mcp`
+This creates an HTTPS endpoint for AI tools at: `https://localhost:8443/f1-race-engineer-lan` (legacy path `/mcp` is still supported).
 
 ## Step 2: Start Pits n' Giggles
 
@@ -29,7 +29,7 @@ Run the application normally. The MCP server starts automatically on port 4768.
 2. Settings → Personalization → **Enable Developer Mode**
 3. Apps → **Create New App**
    - Name: `Pits n' Giggles`
-   - URL: `https://localhost:8443/mcp`
+   - URL: `https://localhost:8443/f1-race-engineer-lan`
    - Transport: `SSE`
 4. Click **Connect**
 
@@ -40,9 +40,9 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "pitsngiggles": {
+    "f1-race-engineer-lan": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://localhost:8443/mcp"]
+      "args": ["-y", "mcp-remote", "https://localhost:8443/f1-race-engineer-lan"]
     }
   }
 }
@@ -52,9 +52,9 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 
 1. Settings → Features → MCP
 2. Add Server:
-   - Name: `Telemetry`
+   - Name: `f1-race-engineer-lan`
    - Type: `SSE`
-   - URL: `https://localhost:8443/mcp`
+   - URL: `https://localhost:8443/f1-race-engineer-lan`
 
 ## Step 4: Start Racing!
 
@@ -84,7 +84,7 @@ Once connected, try these:
 
 **Certificate Error?**
 - Accept the self-signed certificate in your browser first
-- Visit `https://localhost:8443/mcp` and click "Advanced" → "Proceed"
+- Visit `https://localhost:8443/f1-race-engineer-lan` and click "Advanced" → "Proceed"
 
 **No Connection?**
 - Verify Nginx is running: `sudo systemctl status nginx`

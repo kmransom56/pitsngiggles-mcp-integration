@@ -16,9 +16,10 @@ if ! command -v nginx &> /dev/null; then
     exit 1
 fi
 
-# Generate SSL certificate
-echo "Step 1: Generating SSL certificate..."
+# SSL certificates: localhost vhost + f1-race-engineer.netintegrate.net vhost (see nginx config)
+echo "Step 1: Generating SSL certificates..."
 bash "$SCRIPT_DIR/generate-self-signed-cert.sh" /etc/nginx/ssl/pitsngiggles localhost
+bash "$SCRIPT_DIR/generate-self-signed-cert.sh" /etc/nginx/ssl/f1-race-engineer.netintegrate.net f1-race-engineer.netintegrate.net
 
 # Copy nginx config
 echo ""
@@ -51,12 +52,14 @@ echo ""
 echo "=== Setup Complete! ==="
 echo ""
 echo "Your Pits n' Giggles MCP server is now accessible via:"
-echo "  • HTTPS: https://localhost:8443/mcp"
-echo "  • HTTP:  http://localhost:80 (redirects to HTTPS)"
+echo "  • HTTPS (local):  https://localhost:8443/f1-race-engineer-lan  (legacy path: /mcp)"
+echo "  • HTTPS (LAN DNS): https://f1-race-engineer.netintegrate.net:8443/f1-race-engineer-lan"
+echo "  • HTTP:  port 80 redirects to HTTPS for localhost and f1-race-engineer.netintegrate.net"
 echo ""
 echo "Next steps:"
-echo "  1. Start Pits n' Giggles with MCP server enabled"
-echo "  2. Configure your AI tool to connect to: https://localhost:8443/mcp"
+echo "  1. Ensure DNS A record f1-race-engineer.netintegrate.net → this Nginx host (you have this)"
+echo "  2. Start Pits n' Giggles with MCP server enabled on 4768"
+echo "  3. Configure AI clients to: https://f1-race-engineer.netintegrate.net:8443/f1-race-engineer-lan  (or localhost URL)"
 echo "  3. Accept the self-signed certificate in your browser/AI tool"
 echo ""
 echo "To check Nginx status: sudo systemctl status nginx"

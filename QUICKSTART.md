@@ -39,8 +39,8 @@ Double-click `start.bat` or run from command prompt.
 ║  Telemetry Dashboard        │  :4768            ║
 ║  Engineer View              │  :4768/eng-view   ║
 ║  F1 Race Engineer (AI)      │  :4768/strategy   ║
-║  MCP Server (HTTP)          │  :4768/mcp        ║
-║  MCP Server (HTTPS)         │  :8443/mcp        ║
+║  MCP Server (HTTP)          │  :4768/f1-race-engineer-lan  ║
+║  MCP Server (HTTPS)         │  :8443/f1-race-engineer-lan  ║
 ╚═════════════════════════════╧═══════════════════╝
 ```
 
@@ -85,7 +85,7 @@ Double-click `start.bat` or run from command prompt.
 2. **Create F1 Race Engineer App**
    - Apps → Create New App
    - **Name:** `F1 Race Engineer`
-   - **URL:** `https://localhost:8443/mcp` (or `http://localhost:4768/mcp`)
+   - **URL:** `https://localhost:8443/f1-race-engineer-lan` (or `http://localhost:4768/f1-race-engineer-lan`)
    - **Transport:** `SSE`
 
 3. **Connect**
@@ -114,9 +114,9 @@ Double-click `start.bat` or run from command prompt.
    ```json
    {
      "mcpServers": {
-       "pitsngiggles": {
+       "f1-race-engineer-lan": {
          "command": "npx",
-         "args": ["-y", "mcp-remote", "https://localhost:8443/mcp"]
+         "args": ["-y", "mcp-remote", "https://localhost:8443/f1-race-engineer-lan"]
        }
      }
    }
@@ -140,7 +140,7 @@ Double-click `start.bat` or run from command prompt.
 curl http://localhost:4768/race-info
 
 # Check MCP
-curl -N http://localhost:4768/mcp
+curl -N http://localhost:4768/f1-race-engineer-lan
 ```
 
 **Windows:**
@@ -300,12 +300,12 @@ stop.bat && start.bat       # Windows
 **Solutions:**
 1. **Verify MCP endpoint works:**
    ```bash
-   curl -N http://localhost:4768/mcp
+   curl -N http://localhost:4768/f1-race-engineer-lan
    ```
 
 2. **Check URL in AI client:**
-   - ChatGPT: `https://localhost:8443/mcp` or `http://localhost:4768/mcp`
-   - Claude: Must use `https://localhost:8443/mcp` with `mcp-remote`
+   - ChatGPT: `https://localhost:8443/f1-race-engineer-lan` or `http://localhost:4768/f1-race-engineer-lan`
+   - Claude: Must use `https://localhost:8443/f1-race-engineer-lan` with `mcp-remote`
 
 3. **Restart AI client** after configuration
 
@@ -327,7 +327,7 @@ sudo update-ca-certificates
 - Install to "Trusted Root Certification Authorities"
 
 **Or just use HTTP:**
-- `http://localhost:4768/mcp` (works without SSL)
+- `http://localhost:4768/f1-race-engineer-lan` (works without SSL)
 
 ### "Port already in use"
 
@@ -406,7 +406,7 @@ switchAIMode('openai')
    ```bash
    sudo systemctl stop nginx
    ```
-   Use HTTP endpoint: `http://localhost:4768/mcp`
+   Use HTTP endpoint: `http://localhost:4768/f1-race-engineer-lan`
 
 2. **Use only built-in Strategy Center** (no external AI)
 
@@ -451,8 +451,8 @@ See:
 - Dashboard: `http://localhost:4768`
 - Engineer View: `http://localhost:4768/eng-view`
 - **Strategy Center: `http://localhost:4768/strategy-center`** ⭐
-- MCP (HTTP): `http://localhost:4768/mcp`
-- MCP (HTTPS): `https://localhost:8443/mcp`
+- MCP (HTTP): `http://localhost:4768/f1-race-engineer-lan`
+- MCP (HTTPS): `https://localhost:8443/f1-race-engineer-lan`
 
 **Stop:** `./stop.sh` or `stop.bat`
 

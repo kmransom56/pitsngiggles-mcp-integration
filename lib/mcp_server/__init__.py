@@ -22,6 +22,7 @@
 
 """Model Context Protocol (MCP) server for Pits n' Giggles telemetry."""
 
+from .constants import MCP_HTTP_PATH, MCP_HTTP_PATH_LEGACY, MCP_SERVER_NAME
 from .server import MCPServer
 
-__all__ = ['MCPServer']
+__all__ = ["MCPServer", "MCP_HTTP_PATH", "MCP_HTTP_PATH_LEGACY", "MCP_SERVER_NAME"]

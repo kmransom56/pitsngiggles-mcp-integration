@@ -22,10 +22,13 @@
 
 # -------------------------------------- IMPORTS -----------------------------------------------------------------------
 
+import html
 import logging
 import os
+import sys
 import webbrowser
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from apps.backend.state_mgmt_layer import SessionState
@@ -37,7 +40,7 @@ from apps.backend.state_mgmt_layer.intf import (
 )
 from lib.child_proc_mgmt import notify_parent_init_complete
 from lib.config import PngSettings
-from lib.mcp_server import MCPServer
+from lib.mcp_server import MCPServer, MCP_HTTP_PATH, MCP_HTTP_PATH_LEGACY
 from lib.web_server import BaseWebServer, ClientType
 
 # -------------------------------------- GLOBALS -----------------------------------------------------------------------
@@ -105,7 +108,52 @@ class TelemetryWebServer(BaseWebServer):
         self.m_disable_browser_autoload = settings.Display.disable_browser_autoload
         self.m_mcp_server = MCPServer(session_state, logger)
         self.m_race_engineer_mounted: bool = False
+        self.m_race_engineer_fallback_registered: bool = False
         self._try_mount_race_engineer()
+
+    def _ensure_repo_root_on_path(self) -> None:
+        """So ``import engineer_voice`` works when the process cwd is not the repo root."""
+        root = Path(__file__).resolve().parents[3]
+        s = str(root)
+        if s and s not in sys.path:
+            sys.path.insert(0, s)
+
+    def _register_race_engineer_unavailable_routes(self, detail: str) -> None:
+        """Quart 404 is confusing when the ASGI sub-app did not mount; return 503 with instructions."""
+        if self.m_race_engineer_fallback_registered:
+            return
+        self.m_race_engineer_fallback_registered = True
+        body = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>LAN race engineer unavailable</title></head>
+<body>
+<h1>LAN race engineer is not available on this process</h1>
+<p>Expected URL: <code>/race-engineer/</code> (should be served by the in-process FastAPI app).</p>
+<p><b>What to do</b></p>
+<ul>
+<li>Install the same app dependencies as <code>pyproject.toml</code> (e.g. <code>fastapi</code>, <code>httpx</code>, <code>python-multipart</code>) in the environment that runs Pits n&apos; Giggles, then restart.</li>
+<li>If you set <code>RACE_ENGINEER_DISABLE_MOUNT</code>, unset it and restart, or use standalone: <code>RACE_ENGINEER_STANDALONE=1</code> and the port <code>11734</code> server.</li>
+</ul>
+<p><b>Details</b></p>
+<pre style="white-space:pre-wrap">{html.escape(detail, quote=False)}</pre>
+</body></html>"""
+
+        from quart import Response
+
+        @self.http_route("/race-engineer/")
+        async def _re_unavailable_slash() -> Response:
+            return Response(
+                body,
+                status=503,
+                mimetype="text/html; charset=utf-8",
+            )
+
+        @self.http_route("/race-engineer")
+        async def _re_unavailable_noslash() -> Response:
+            return Response(
+                body,
+                status=503,
+                mimetype="text/html; charset=utf-8",
+            )
 
     def _try_mount_race_engineer(self) -> None:
         """LAN race engineer (FastAPI) at ``/race-engineer`` on the same port as this server."""
@@ -114,21 +162,43 @@ class TelemetryWebServer(BaseWebServer):
             "true",
             "yes",
         ):
+            self.m_logger.info(
+                "LAN race engineer mount disabled (RACE_ENGINEER_DISABLE_MOUNT). "
+                "Use standalone on 11734 with RACE_ENGINEER_STANDALONE=1 or unset the env and restart."
+            )
+            self._register_race_engineer_unavailable_routes(
+                "RACE_ENGINEER_DISABLE_MOUNT is set."
+            )
             return
+        self._ensure_repo_root_on_path()
         try:
             from lib.asgi_prefix_mount import asgi_mount_at_prefix
             from engineer_voice.server import app as _race_engineer_asgi
-        except ImportError as exc:
-            self.m_logger.info("LAN race engineer not mounted: %s", exc)
+        except Exception as exc:
+            self.m_logger.warning(
+                "LAN race engineer not mounted (import failed). "
+                "Install fastapi, httpx, python-multipart per pyproject.toml and restart. %s",
+                exc,
+            )
+            self._register_race_engineer_unavailable_routes(
+                f"{type(exc).__name__}: {exc!s}"
+            )
             return
         if not os.environ.get("PNG_BASE", "").strip():
             proto = "https" if self.m_cert_path else "http"
             os.environ["PNG_BASE"] = f"{proto}://127.0.0.1:{self.m_port}"
-        self.m_sio_app = asgi_mount_at_prefix(
-            self.m_sio_app,
-            "/race-engineer",
-            _race_engineer_asgi,
-        )
+        try:
+            self.m_sio_app = asgi_mount_at_prefix(
+                self.m_sio_app,
+                "/race-engineer",
+                _race_engineer_asgi,
+            )
+        except Exception as exc:
+            self.m_logger.warning("LAN race engineer mount failed: %s", exc)
+            self._register_race_engineer_unavailable_routes(
+                f"{type(exc).__name__}: {exc!s}"
+            )
+            return
         self.m_race_engineer_mounted = True
         self.m_logger.info(
             "LAN Race Engineer: http://127.0.0.1:%s/race-engineer/ (Ollama + voice, same app)",
@@ -285,9 +355,12 @@ class TelemetryWebServer(BaseWebServer):
         Define Model Context Protocol (MCP) routes for AI tool integration.
 
         Sets up Server-Sent Events endpoint for ChatGPT, Claude, Cursor, etc.
+        Canonical path: ``MCP_HTTP_PATH`` (``/f1-race-engineer-lan``).
+        Legacy alias: ``MCP_HTTP_PATH_LEGACY`` (``/mcp``).
         """
 
-        @self.http_route("/mcp")
+        from quart import Response
+
         async def mcpEndpoint():
             """
             MCP Server-Sent Events endpoint for AI tools.
@@ -295,7 +368,6 @@ class TelemetryWebServer(BaseWebServer):
             Provides real-time telemetry data access to AI assistants using
             the Model Context Protocol over SSE.
             """
-            from quart import Response
 
             async def generate():
                 async for event in self.m_mcp_server.stream_events():
@@ -312,21 +384,23 @@ class TelemetryWebServer(BaseWebServer):
                 },
             )
 
-        @self.http_route("/mcp/tools", methods=["POST"])
         async def mcpToolsEndpoint():
             """
             Handle MCP tool invocation requests.
 
             Allows AI tools to call specific telemetry functions via POST.
             """
-            import json
-
             data = await self.request.get_json()
             method = data.get("method", "tools/list")
             params = data.get("params", {})
 
             result = await self.m_mcp_server.handle_request(method, params)
             return self.jsonify(result), HTTPStatus.OK
+
+        for path in (MCP_HTTP_PATH, MCP_HTTP_PATH_LEGACY):
+            self.m_app.route(path)(mcpEndpoint)
+        for path in (f"{MCP_HTTP_PATH}/tools", f"{MCP_HTTP_PATH_LEGACY}/tools"):
+            self.m_app.route(path, methods=["POST"])(mcpToolsEndpoint)
 
     async def _post_start(self) -> None:
         """Function to be called after the server starts serving."""

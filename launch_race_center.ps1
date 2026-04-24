@@ -1,13 +1,12 @@
 ﻿# ═══════════════════════════════════════════════════════════
 # 🏎️ Pits N' Giggles — Race Strategy Center + LAN Race Engineer
 # ═══════════════════════════════════════════════════════════
-# Starts Pits N' Giggles (telemetry + LAN race engineer at /race-engineer/ on
-# the same HTTP port). Optional standalone engineer on 11734: set
-# RACE_ENGINEER_STANDALONE=1. Ensures Nginx in WSL, opens Strategy Center.
+# Starts Pits n' Giggles (telemetry). Default: standalone voice on 11734 and
+# open http://127.0.0.1:11734/ in the browser. RACE_ENGINEER_STANDALONE=0 uses
+# in-app /race-engineer/ on 4768 only (no 11734). Nginx in WSL for MCP/HTTPS.
 #
 #   Full stack (default):     .\launch_race_center.ps1
 #   Engineer voice only:      .\launch_race_center.ps1 -EngineerVoiceOnly
-#                             (same as start_engineer_voice.ps1)
 #   Skip LAN engineer:        .\launch_race_center.ps1 -SkipEngineerVoice
 # ═══════════════════════════════════════════════════════════
 
@@ -197,10 +196,16 @@ if ($env:PNG_EXE) {
 } else {
     $PNGExe = Join-Path $root "pits_n_giggles_3.2.2.exe"
 }
+# Strategy Center in browser. DNS: A record f1-race-engineer.netintegrate.net → Nginx (port 8443). Override: $env:STRATEGY_CENTER_URL
 if ($env:STRATEGY_CENTER_URL) {
     $StrategyURL = $env:STRATEGY_CENTER_URL.TrimEnd("/") + "/"
 } else {
-    $StrategyURL = "https://mcp.netintegrate.net:8443/"
+    $StrategyURL = "https://f1-race-engineer.netintegrate.net:8443/"
+}
+# HTTPS + Nginx path to standalone voice app (must match deployment/nginx/pitsngiggles-mcp.conf)
+$RaceEngineerAppUrl = $StrategyURL.TrimEnd("/") + "/race-engineer/"
+if ($env:RACE_ENGINEER_APP_URL) {
+    $RaceEngineerAppUrl = $env:RACE_ENGINEER_APP_URL.TrimEnd("/") + "/"
 }
 $TelemetryPort = 4768
 
@@ -210,6 +215,9 @@ Write-Host "  ║   🏎️  Race Strategy Center Launcher      ║" -Foreground
 Write-Host "  ║   Pits N' Giggles + LAN Race Engineer   ║" -ForegroundColor Cyan
 Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
+
+# If we start PNG this run, its HTTP server opens /race-engineer/ (or /) in a browser — do not open a second tab for the same URL in Step 2.
+$weStartedPngThisRun = $false
 
 # ── Step 1: Start Pits N' Giggles if not already running
 $pngRunning = Get-Process -Name "pits_n_giggles*" -ErrorAction SilentlyContinue
@@ -232,6 +240,7 @@ if ($pngRunning) {
             $workDir = $root
         }
         $null = Start-Process -FilePath $PNGExe -WorkingDirectory $workDir -PassThru -ErrorAction Stop
+        $weStartedPngThisRun = $true
     } catch {
         Write-Host "  ❌ Could not start Pits N' Giggles: $($_.Exception.Message)" -ForegroundColor Red
         if ($_.Exception.Message -match "canceled|cancelled") {
@@ -256,11 +265,13 @@ if ($pngRunning) {
     }
 }
 
-# ── Step 2: LAN Race Engineer (built into Pits n' Giggles HTTP on /race-engineer/)
+# ── Step 2: LAN Race Engineer
+# Default: standalone voice app on 11734. Set RACE_ENGINEER_STANDALONE=0 for in-app /race-engineer/ only.
+$useStandaloneEngineer = (-not $SkipEngineerVoice) -and ($env:RACE_ENGINEER_STANDALONE -ne "0")
 if ($SkipEngineerVoice) {
     Write-Host "  ⏭️  Skipping LAN Race Engineer (-SkipEngineerVoice)" -ForegroundColor DarkGray
-} elseif ($env:RACE_ENGINEER_STANDALONE -eq "1") {
-    Write-Host "  🎙️ RACE_ENGINEER_STANDALONE=1 — starting separate engineer on port $EngineerPort..." -ForegroundColor Yellow
+} elseif ($useStandaloneEngineer) {
+    Write-Host "  🎙️ Starting standalone LAN race engineer (voice) on port $EngineerPort..." -ForegroundColor Yellow
     try {
         Start-EngineerVoiceProcess -RunInForeground $false
     } catch {
@@ -268,9 +279,13 @@ if ($SkipEngineerVoice) {
         Write-Host "     Voice UI: http://127.0.0.1:$EngineerPort/" -ForegroundColor DarkGray
     }
 } else {
-    Write-Host "  🎙️ LAN Race Engineer is inside Pits n' Giggles: http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor Green
+    Write-Host "  🎙️ RACE_ENGINEER_STANDALONE=0 — engineer UI inside Pits n' Giggles: http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor Green
     if (Test-LocalPort -Port $TelemetryPort) {
-        Start-Process "http://127.0.0.1:$TelemetryPort/race-engineer/"
+        if (-not $weStartedPngThisRun) {
+            Start-Process "http://127.0.0.1:$TelemetryPort/race-engineer/"
+        } else {
+            Write-Host "  (Pits n' Giggles opened that URL on startup — skipping a duplicate tab.)" -ForegroundColor DarkGray
+        }
     }
 }
 
@@ -286,46 +301,113 @@ if ($nginxStatus -match "running|active") {
     Write-Host "  ✅ Nginx started" -ForegroundColor Green
 }
 
-# ── Step 4: Verify HTTPS endpoint is reachable
-Write-Host "  🔍 Verifying Strategy Center endpoint..." -ForegroundColor Yellow
-$attempts = 0
-$maxAttempts = 10
-while ($attempts -lt $maxAttempts) {
-    try {
-        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-        $response = Invoke-WebRequest -Uri $StrategyURL -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-        if ($response.StatusCode -eq 200) {
-            Write-Host "  ✅ Strategy Center is responding (HTTP 200)" -ForegroundColor Green
+# ── Step 4: Optional reachability check (do not block launch)
+$openUrl = $StrategyURL
+$openLabel = "Strategy Center (Nginx)"
+if ($useStandaloneEngineer) {
+    $engineerUrl = $RaceEngineerAppUrl
+    $openUrl = $RaceEngineerAppUrl
+    $openLabel = "LAN race engineer (voice) at FQDN"
+    Write-Host "  🔍 Verifying voice app via Nginx ($RaceEngineerAppUrl)..." -ForegroundColor Yellow
+    $verifyOk = $false
+    $lastErr = $null
+    $maxAttempts = 10
+    for ($a = 0; $a -lt $maxAttempts; $a++) {
+        try {
+            if ($PSVersionTable.PSVersion.Major -ge 6) {
+                $response = Invoke-WebRequest -Uri $engineerUrl -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -SkipCertificateCheck
+            } else {
+                if ($engineerUrl -like "https://*") {
+                    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+                }
+                $response = Invoke-WebRequest -Uri $engineerUrl -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+            }
+            $code = [int]$response.StatusCode
+            Write-Host "  ✅ Voice app responded (HTTP $code)" -ForegroundColor Green
+            $verifyOk = $true
             break
+        } catch {
+            $lastErr = $_.Exception.Message
         }
-    } catch {
-        Start-Sleep -Seconds 1
-        $attempts++
+        if ($a -lt ($maxAttempts - 1)) {
+            Start-Sleep -Seconds 1
+        }
+    }
+    if (-not $verifyOk) {
+        Write-Host "  ⚠️  Could not reach $engineerUrl — opening browser anyway" -ForegroundColor DarkYellow
+        if ($lastErr) {
+            Write-Host "     ($lastErr)" -ForegroundColor DarkGray
+        }
+    }
+} else {
+    Write-Host "  🔍 Verifying Strategy Center endpoint..." -ForegroundColor Yellow
+    $verifyOk = $false
+    $lastErr = $null
+    $maxAttempts = 10
+    for ($a = 0; $a -lt $maxAttempts; $a++) {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        try {
+            if ($PSVersionTable.PSVersion.Major -ge 6) {
+                $response = Invoke-WebRequest -Uri $StrategyURL -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop -SkipHttpErrorCheck
+            } else {
+                $response = Invoke-WebRequest -Uri $StrategyURL -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            }
+            $code = [int]$response.StatusCode
+            Write-Host "  ✅ Strategy Center responded (HTTP $code)" -ForegroundColor Green
+            $verifyOk = $true
+            break
+        } catch {
+            $ex = $_.Exception
+            $lastErr = $ex.Message
+            try {
+                $resp = $ex.Response
+                if ($null -ne $resp -and $null -ne $resp.StatusCode) {
+                    $code = [int]$resp.StatusCode
+                    Write-Host "  ✅ Strategy Center reached the server (HTTP $code) — may need login or a path fix" -ForegroundColor Green
+                    $verifyOk = $true
+                    break
+                }
+            } catch {
+            }
+        }
+        if ($a -lt ($maxAttempts - 1)) {
+            Start-Sleep -Seconds 1
+        }
+    }
+    if (-not $verifyOk) {
+        Write-Host "  ⚠️  Could not reach $StrategyURL from this PC (firewall, DNS, VPN, or host down) — opening browser anyway" -ForegroundColor DarkYellow
+        if ($lastErr) {
+            Write-Host "     ($lastErr)" -ForegroundColor DarkGray
+        }
     }
 }
-if ($attempts -eq $maxAttempts) {
-    Write-Host "  ⚠️  Could not verify endpoint — opening browser anyway" -ForegroundColor DarkYellow
-}
 
-# ── Step 5: Open the Strategy Center in default browser
+# ── Step 5: Open the primary app in the default browser
+if ($useStandaloneEngineer -and -not (Test-LocalPort -Port $EngineerPort)) {
+    Write-Host "  ⚠️  Voice backend not listening on $EngineerPort — Nginx cannot proxy /race-engineer/. Opening Strategy Center root instead." -ForegroundColor DarkYellow
+    $openUrl = $StrategyURL
+    $openLabel = "Strategy Center (Nginx) [fallback - voice backend down]"
+}
 Write-Host ""
-Write-Host "  🏁 Opening Race Strategy Center..." -ForegroundColor Cyan
-Write-Host "     $StrategyURL" -ForegroundColor DarkGray
+Write-Host "  🏁 Opening $openLabel..." -ForegroundColor Cyan
+Write-Host "     $openUrl" -ForegroundColor DarkGray
 Write-Host ""
-Start-Process $StrategyURL
+Start-Process $openUrl
 
 Write-Host "  ════════════════════════════════════════════" -ForegroundColor DarkGray
-Write-Host "  Race Strategy Center is ready! 🏁🏎️💨" -ForegroundColor Green
+Write-Host "  Launcher is ready! 🏁🏎️💨" -ForegroundColor Green
+Write-Host "  Primary browser URL:  $openUrl" -ForegroundColor DarkGray
 Write-Host "  Telemetry:    http://localhost:$TelemetryPort" -ForegroundColor DarkGray
 if (-not $SkipEngineerVoice) {
-    if ($env:RACE_ENGINEER_STANDALONE -eq "1") {
-        Write-Host "  Race engineer (standalone): http://127.0.0.1:$EngineerPort/" -ForegroundColor DarkGray
+    if ($useStandaloneEngineer) {
+        Write-Host "  Race engineer (HTTPS): $RaceEngineerAppUrl" -ForegroundColor DarkGray
+        Write-Host "  Voice backend (direct):  http://127.0.0.1:$EngineerPort/" -ForegroundColor DarkGray
     } else {
-        Write-Host "  Race engineer (same app):    http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor DarkGray
+        Write-Host "  Race engineer (in-app):  http://127.0.0.1:$TelemetryPort/race-engineer/" -ForegroundColor DarkGray
     }
 }
-Write-Host "  Dashboard:    $StrategyURL" -ForegroundColor DarkGray
-Write-Host "  MCP (SSE):    $($StrategyURL.TrimEnd('/'))/mcp  (ChatGPT / Cursor)" -ForegroundColor DarkGray
+Write-Host "  Strategy Center (Nginx, optional):  $StrategyURL" -ForegroundColor DarkGray
+Write-Host "  MCP (SSE, f1-race-engineer-lan):    $($StrategyURL.TrimEnd('/'))/f1-race-engineer-lan  (ChatGPT / Cursor; /mcp still works)" -ForegroundColor DarkGray
 Write-Host "  ════════════════════════════════════════════" -ForegroundColor DarkGray
 Write-Host ""
 Start-Sleep -Seconds 5

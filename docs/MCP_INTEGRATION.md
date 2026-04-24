@@ -2,6 +2,8 @@
 
 Pits n' Giggles now supports the Model Context Protocol (MCP), allowing AI tools like ChatGPT, Claude, and Cursor to directly access live F1 telemetry data.
 
+**Paths:** the canonical HTTP path is **`/f1-race-engineer-lan`** (and **`/f1-race-engineer-lan/tools`** for POST). The legacy path **`/mcp`** (and **`/mcp/tools`**) remains available. Use the display name **`f1-race-engineer-lan`** in MCP client lists.
+
 ## Overview
 
 The MCP server exposes telemetry data through a standardized protocol that AI assistants can use to:
@@ -15,9 +17,9 @@ The MCP server exposes telemetry data through a standardized protocol that AI as
 ### 1. Start Pits n' Giggles
 
 Run the application normally. The MCP server is automatically available at:
-- **Local**: `http://localhost:4768/mcp`
-- **With HTTPS**: `https://localhost:4768/mcp`
-- **With Nginx Proxy**: `https://localhost:8443/mcp` (see [Nginx Setup](#nginx-reverse-proxy))
+- **Local**: `http://localhost:4768/f1-race-engineer-lan`
+- **With HTTPS**: `https://localhost:4768/f1-race-engineer-lan`
+- **With Nginx Proxy**: `https://localhost:8443/f1-race-engineer-lan` (see [Nginx Setup](#nginx-reverse-proxy))
 
 ### 2. Access the Strategy Center (Optional)
 
@@ -49,7 +51,7 @@ This will:
 2. Configure Nginx to proxy MCP traffic
 3. Enable HTTPS on port 8443
 
-Your MCP endpoint will be available at: `https://localhost:8443/mcp`
+Your MCP endpoint will be available at: `https://localhost:8443/f1-race-engineer-lan`
 
 For remote access, replace `localhost` with your server's IP or domain name.
 
@@ -167,7 +169,7 @@ This section provides quick setup for the most common tools. For advanced config
 2. **Create New App**
    - Apps → Create New App
    - **Name**: `Pits n' Giggles`
-   - **App URL**: `https://localhost:8443/mcp` (or your server URL)
+   - **App URL**: `https://localhost:8443/f1-race-engineer-lan` (or your server URL)
    - **Transport Type**: `SSE`
 
 3. **Connect**
@@ -188,7 +190,7 @@ This section provides quick setup for the most common tools. For advanced config
 2. **Add Server**
    - **Name**: `Pits n Giggles Telemetry`
    - **Type**: `SSE`
-   - **URL**: `https://localhost:8443/mcp`
+   - **URL**: `https://localhost:8443/f1-race-engineer-lan`
 
 3. **Use in Chat**
    - The AI agent will automatically have access to telemetry data
@@ -213,7 +215,7 @@ Add this configuration:
       "args": [
         "-y",
         "mcp-remote",
-        "https://localhost:8443/mcp"
+        "https://localhost:8443/f1-race-engineer-lan"
       ]
     }
   }
@@ -237,7 +239,7 @@ Add this configuration:
   "mcpServers": {
     "Pits_N_Giggles": {
       "type": "sse",
-      "url": "https://localhost:8443/mcp"
+      "url": "https://localhost:8443/f1-race-engineer-lan"
     }
   }
 }
@@ -267,7 +269,7 @@ sudo update-ca-certificates
 ```
 
 ### Browser (for testing)
-- **Chrome/Edge**: Visit `https://localhost:8443/mcp` and click "Advanced" → "Proceed to localhost"
+- **Chrome/Edge**: Visit `https://localhost:8443/f1-race-engineer-lan` and click "Advanced" → "Proceed to localhost"
 - **Firefox**: Visit URL → Click "Advanced" → "Accept the Risk and Continue"
 
 ---
@@ -318,12 +320,12 @@ Here are some example prompts you can use with your AI assistant:
 
 **"Certificate verification failed"**
 - Trust the self-signed certificate (see above)
-- Or use HTTP instead: `http://localhost:4768/mcp`
+- Or use HTTP instead: `http://localhost:4768/f1-race-engineer-lan`
 
 **"No tools available"**
 - Refresh the connection in your AI tool
 - Check browser console for errors
-- Verify `/mcp` endpoint returns data: `curl http://localhost:4768/mcp`
+- Verify `/mcp` endpoint returns data: `curl http://localhost:4768/f1-race-engineer-lan`
 
 ### Data Issues
 
@@ -348,19 +350,19 @@ Here are some example prompts you can use with your AI assistant:
 
 Test the SSE connection:
 ```bash
-curl -N http://localhost:4768/mcp
+curl -N http://localhost:4768/f1-race-engineer-lan
 ```
 
 Test tool invocation:
 ```bash
-curl -X POST http://localhost:4768/mcp/tools \
+curl -X POST http://localhost:4768/f1-race-engineer-lan/tools \
   -H "Content-Type: application/json" \
   -d '{"method": "tools/list"}'
 ```
 
 Get race info:
 ```bash
-curl -X POST http://localhost:4768/mcp/tools \
+curl -X POST http://localhost:4768/f1-race-engineer-lan/tools \
   -H "Content-Type: application/json" \
   -d '{"method": "tools/call", "params": {"name": "get_race_info", "arguments": {}}}'
 ```
