@@ -84,14 +84,27 @@ sudo systemctl reload nginx
 
 ## MCP / Strategy Center URLs
 
-After install, Nginx answers on **:8443** for:
+After install, the **f1** vhost answers on **443** and **8443** (same TLS; use either). Localhost/mcp vhosts are **8443** only in this config.
 
-- `https://localhost/…` and `https://mcp.local/…` (local dev, self-signed in `pitsngiggles/`)
-- `https://f1-race-engineer.netintegrate.net/…` when the **A** record points to this host (certs in `f1-race-engineer.netintegrate.net/` or your CA paths)
+- `https://localhost:8443/…` and `https://mcp.local:8443/…` (self-signed in `pitsngiggles/`)
+- `https://f1-race-engineer.netintegrate.net/…` (default port **443**) or `https://f1-race-engineer.netintegrate.net:8443/…` when the **A** record points to this host
 
 MCP (SSE) path: `/f1-race-engineer-lan` (legacy: `/mcp`).
 
-- **HTTP** on port 80 redirects both name sets to **HTTPS 8443**.
+- **HTTP (port 80) `f1-race-engineer…`:** 301 to **https://$host$request_uri** (HTTPS on **443**).  
+- **HTTP localhost / mcp.local:** 301 to **https://$host:8443$request_uri** (unchanged).
+
+### WSL2 on Windows: `ERR_CONNECTION_REFUSED` or other PCs cannot open `https://f1-…`
+
+1. **Nginx in WSL must be running** (`wsl -u root service nginx status`).
+
+2. **From this PC first:** if `https://f1-race-engineer.netintegrate.net` still uses old DNS, add to `C:\Windows\System32\drivers\etc\hosts`: `127.0.0.1 f1-race-engineer.netintegrate.net` (or your LAN IP if you are testing from another device).
+
+3. **Windows Firewall (this PC as server):** allow **inbound TCP 80, 443, 8443** (or run `deployment\scripts\Ensure-WslF1PortForward.ps1` as **Administrator** — it adds firewall rules and port forwarding from the host to WSL).
+
+4. **Other PCs on the LAN** must reach the **Windows host IPv4** that the **A record** for `f1-race-engineer.netintegrate.net` points to. WSL2 does not expose Nginx to the LAN by default; the script uses `netsh interface portproxy` to forward those ports to the current WSL instance IP. **Re-run the script after a WSL or PC reboot** if the WSL IP changes.
+
+5. If **443 on Windows is already in use** (IIS, etc.), free it or use only `https://f1…:8443/`.
 
 ## Connecting AI Tools
 

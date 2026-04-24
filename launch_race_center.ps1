@@ -200,7 +200,7 @@ if ($env:PNG_EXE) {
 if ($env:STRATEGY_CENTER_URL) {
     $StrategyURL = $env:STRATEGY_CENTER_URL.TrimEnd("/") + "/"
 } else {
-    $StrategyURL = "https://f1-race-engineer.netintegrate.net:8443/"
+    $StrategyURL = "https://f1-race-engineer.netintegrate.net/"
 }
 # HTTPS + Nginx path to standalone voice app (must match deployment/nginx/pitsngiggles-mcp.conf)
 $RaceEngineerAppUrl = $StrategyURL.TrimEnd("/") + "/race-engineer/"
