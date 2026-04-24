@@ -106,6 +106,20 @@ MCP (SSE) path: `/f1-race-engineer-lan` (legacy: `/mcp`).
 
 5. If **443 on Windows is already in use** (IIS, etc.), free it or use only `https://f1…:8443/`.
 
+### 502 Bad Gateway from Nginx (WSL2 + Windows)
+
+Nginx in **WSL2** must **not** proxy to `127.0.0.1:4768` / `:11734` — that is loopback *inside the Linux VM*, not the **Windows** host where Pits n' Giggles and engineer_voice run. The site config **includes** `/etc/nginx/snippets/pitsngiggles-wsl2-upstream.conf`, which must list the **Windows host IP** (WSL2 default route).
+
+- **Regenerate the snippet and reload Nginx** (on Windows):
+
+  `deployment\scripts\Apply-Wsl2NginxUpstreams.ps1`
+
+  or in WSL: `sudo bash deployment/scripts/apply-wsl2-nginx-upstreams.sh` then `sudo nginx -s reload`.
+
+- Ensure **Pits n' Giggles** is listening on **4768** and **engineer voice** on **11734** on Windows (e.g. run `launch_race_center.ps1`).
+
+- **Windows Firewall** may still need to allow inbound to those ports from the WSL interface (rare; usually the issue is the wrong upstream IP).
+
 ## Connecting AI Tools
 
 ### ChatGPT Desktop

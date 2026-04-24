@@ -21,6 +21,12 @@ echo "Step 1: Generating SSL certificates..."
 bash "$SCRIPT_DIR/generate-self-signed-cert.sh" /etc/nginx/ssl/pitsngiggles localhost
 bash "$SCRIPT_DIR/generate-self-signed-cert.sh" /etc/nginx/ssl/f1-race-engineer.netintegrate.net f1-race-engineer.netintegrate.net
 
+# WSL2: upstreams must target Windows (502 if Nginx in WSL used 127.0.0.1 for services on host)
+echo ""
+echo "Step 1b: Configuring upstream IP for 4768 / 11734 (Windows host on WSL2)..."
+sudo mkdir -p /etc/nginx/snippets
+sudo bash "$SCRIPT_DIR/apply-wsl2-nginx-upstreams.sh"
+
 # Copy nginx config
 echo ""
 echo "Step 2: Installing Nginx configuration..."
