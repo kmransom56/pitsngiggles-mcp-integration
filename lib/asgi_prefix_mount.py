@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import typing
-
-if typing.TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 ASGI = typing.Callable[
     [dict, typing.Any, typing.Callable],

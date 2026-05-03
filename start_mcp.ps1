@@ -1,8 +1,11 @@
-﻿$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Continue"
+$root = $PSScriptRoot
 if ($env:PNG_EXE) {
     $PNGExe = $env:PNG_EXE
 } else {
-    $PNGExe = Join-Path $PSScriptRoot "pits_n_giggles_3.2.2.exe"
+    $PNGExe = Get-ChildItem -Path $root -Filter "pits_n_giggles*.exe" | Select-Object -First 1
+    if ($PNGExe) { $PNGExe = $PNGExe.FullName }
+    else { $PNGExe = Join-Path $root "pits_n_giggles_3.2.2.exe" }
 }
 $TelemetryPort = 4768
 
@@ -13,30 +16,34 @@ if ($pngRunning) {
     Start-Sleep -Seconds 2
 }
 
-if (-not (Test-Path -LiteralPath $PNGExe)) {
-    Write-Host "Executable not found: $PNGExe" -ForegroundColor Red
-    Write-Host "Install or copy pits_n_giggles_3.2.2.exe next to this script, or set env var PNG_EXE to the full path." -ForegroundColor Yellow
-    exit 1
-}
-try {
-    Unblock-File -LiteralPath $PNGExe -ErrorAction SilentlyContinue
-} catch {
+$weStartedPngThisRun = $false
+if (Test-Path -LiteralPath $PNGExe) {
+    Write-Host "Starting Pits N' Giggles EXE: $PNGExe"
+    try {
+        Unblock-File -LiteralPath $PNGExe -ErrorAction SilentlyContinue
+        $workDir = Split-Path -Parent $PNGExe
+        if (-not $workDir) { $workDir = $root }
+        $null = Start-Process -FilePath $PNGExe -WorkingDirectory $workDir -PassThru -ErrorAction Stop
+        $weStartedPngThisRun = $true
+    } catch {
+        Write-Host "Could not start Pits N' Giggles EXE: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
-Write-Host "Starting Pits N' Giggles..."
-try {
-    $workDir = Split-Path -Parent $PNGExe
-    if (-not $workDir) {
-        $workDir = $PSScriptRoot
+if (-not $weStartedPngThisRun) {
+    Write-Host "Executable not found or failed to start. Attempting source launch..." -ForegroundColor Yellow
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        Write-Host "Starting from source (uv)..." -ForegroundColor Yellow
+        Start-Process -FilePath "uv" -ArgumentList "run", "python", "-O", "-m", "apps.launcher" -WorkingDirectory $root
+        $weStartedPngThisRun = $true
+    } elseif (Test-Path -LiteralPath (Join-Path $root ".venv\Scripts\python.exe")) {
+        Write-Host "Starting from source (.venv)..." -ForegroundColor Yellow
+        Start-Process -FilePath (Join-Path $root ".venv\Scripts\python.exe") -ArgumentList "-O", "-m", "apps.launcher" -WorkingDirectory $root
+        $weStartedPngThisRun = $true
+    } else {
+        Write-Host "No executable and no Python environment found. Please follow QUICKSTART.md." -ForegroundColor Red
+        exit 1
     }
-    $null = Start-Process -FilePath $PNGExe -WorkingDirectory $workDir -PassThru -ErrorAction Stop
-} catch {
-    Write-Host "Could not start Pits N' Giggles: $($_.Exception.Message)" -ForegroundColor Red
-    if ($_.Exception.Message -match "canceled|cancelled") {
-        Write-Host "If you saw 'Windows protected your PC' (SmartScreen), click More info, then Run anyway, or:" -ForegroundColor Yellow
-        Write-Host "Right-click the .exe, Properties, check Unblock, OK, then run this script again." -ForegroundColor Yellow
-    }
-    exit 1
 }
 
 Write-Host "Waiting for telemetry server on port $TelemetryPort..."

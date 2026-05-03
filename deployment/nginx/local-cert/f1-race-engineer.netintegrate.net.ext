@@ -1,0 +1,4 @@
+subjectAltName=DNS:f1-race-engineer.netintegrate.net
+extendedKeyUsage=serverAuth
+basicConstraints=CA:false
+keyUsage=digitalSignature,keyEncipherment

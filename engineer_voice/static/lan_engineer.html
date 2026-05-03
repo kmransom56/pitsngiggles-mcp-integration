@@ -131,6 +131,28 @@
       d.textContent = text;
       log.appendChild(d);
     }
+    function micErrorMessage(e) {
+      const name = e && e.name ? e.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Microphone permission is blocked. Allow microphone access for this site, then refresh.";
+      }
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "No microphone input device was found. Connect or enable a mic, then refresh.";
+      }
+      return "Mic: " + (e && e.message ? e.message : e);
+    }
+    function browserSttErrorMessage(error) {
+      if (error === "network") {
+        return "Browser STT network error: Chrome/Edge Web Speech needs an online browser speech service. Use Start server STT stream for local Whisper.";
+      }
+      if (error === "not-allowed" || error === "service-not-allowed") {
+        return "Browser STT permission is blocked. Allow microphone/speech access, or use Start server STT stream for local Whisper.";
+      }
+      if (error === "no-speech") {
+        return "Browser STT heard no speech. Try again, or use Start server STT stream for local Whisper.";
+      }
+      return "Browser STT: " + (error || "error");
+    }
     function removeCallingSys() {
       log.querySelectorAll(".msg.sys").forEach((x) => {
         if (/\b(Ollama|ollama|calling|stream)\b/.test(x.textContent)) x.remove();
@@ -145,7 +167,30 @@
     }
 
     function speakIfEnabled(fullText) {
-      if (document.getElementById("speak").checked && fullText && "speechSynthesis" in window) {
+      if (!document.getElementById("speak").checked || !fullText) return;
+      void speakWithLocalTts(fullText);
+    }
+    async function speakWithLocalTts(fullText) {
+      try {
+        const r = await fetch(API() + "/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: fullText }),
+        });
+        if (r.ok) {
+          if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+          const blob = await r.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.onended = () => URL.revokeObjectURL(url);
+          audio.onerror = () => URL.revokeObjectURL(url);
+          await audio.play();
+          return;
+        }
+      } catch {
+        // Fall back to browser speech below.
+      }
+      if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(fullText);
         u.rate = 1.05;
@@ -161,7 +206,9 @@
         const wss = j.websocket_stt ? "on" : "off";
         healthEl.innerHTML = "Ollama: " + (j.ollama ? "OK" : "down") + " · PNG HTTP: " + (j.pits_n_giggles_http ? "OK" : "down")
           + " · STT: " + stt + " · WS: " + wss
-          + " · model <code>" + (j.ollama_model || "") + "</code>";
+          + " · model <code>" + (j.ollama_model || "") + "</code>"
+          + " · Whisper <code>" + (j.whisper_model || "") + "/" + (j.whisper_compute || "") + "</code>"
+          + " · TTS: " + (j.piper_tts ? "Piper" : "browser");
         document.getElementById("stt-hint").textContent = j.faster_whisper
           ? "Whisper (HTTP + WebSocket) available"
           : "browser / install optional STT for Whisper";
@@ -319,8 +366,7 @@
         rec.start(200);
         ptt.classList.add("rec");
       } catch (e) {
-        addSys("Mic: " + e);
-        fallbackStt();
+        addSys(micErrorMessage(e));
       }
     }
     function stopRec() {
@@ -352,17 +398,20 @@
         const t = e.results[0] && e.results[0][0] && e.results[0][0].transcript;
         if (t) { q.value = t; void sendToEngineer(t); }
       };
-      s.onerror = () => addSys("Speech recognition error");
+      s.onerror = (ev) => addSys(browserSttErrorMessage(ev && ev.error));
       s.start();
     }
 
     // --- Continuous Web Speech (browser) ---
     const contBtn = document.getElementById("cont-toggle");
+    function resetBrowserContinuousStt() {
+      contRec = null;
+      contBtn.textContent = "Start continuous (browser)";
+    }
     contBtn.addEventListener("click", () => {
       if (contRec) {
         try { contRec.stop(); } catch { }
-        contRec = null;
-        contBtn.textContent = "Start continuous (browser)";
+        resetBrowserContinuousStt();
         return;
       }
       if (wsStt) { addSys("Stop server STT first."); return; }
@@ -388,10 +437,19 @@
         }
         if (interim) q.value = interim;
       };
-      s.onerror = (ev) => addSys("Browser STT: " + (ev && ev.error ? ev.error : "error"));
-      s.start();
-      contRec = s;
-      contBtn.textContent = "Stop continuous (browser)";
+      s.onerror = (ev) => {
+        addSys(browserSttErrorMessage(ev && ev.error));
+        resetBrowserContinuousStt();
+      };
+      s.onend = () => resetBrowserContinuousStt();
+      try {
+        s.start();
+        contRec = s;
+        contBtn.textContent = "Stop continuous (browser)";
+      } catch (e) {
+        addSys(browserSttErrorMessage(e && e.message ? e.message : e));
+        resetBrowserContinuousStt();
+      }
     });
 
     // --- WebSocket + Whisper partial STT ---
@@ -442,6 +500,8 @@
     wsGo.addEventListener("click", async () => {
       if (contRec) { addSys("Stop browser continuous STT first."); return; }
       if (wsStt) { addSys("Already running."); return; }
+      addSys("Starting server STT stream…");
+      wsGo.disabled = true;
       const ws = new WebSocket(wsUrl());
       ws.binaryType = "arraybuffer";
       try {
@@ -452,19 +512,23 @@
         });
       } catch (e) {
         addSys((e && e.message) + " — /ws/stt (install requirements-optional-stt.txt and restart).");
+        wsGo.disabled = false;
         try { ws.close(); } catch { }
         return;
       }
       if (ws.readyState !== 1) {
         addSys("WebSocket not open.");
+        wsGo.disabled = false;
         try { ws.close(); } catch { }
         return;
       }
       let stream;
+      addSys("Server STT connected. Waiting for microphone permission…");
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
       } catch (e) {
-        addSys("Mic: " + e);
+        addSys(micErrorMessage(e));
+        wsGo.disabled = false;
         try { ws.close(); } catch { }
         return;
       }
@@ -476,6 +540,7 @@
       } catch (e) {
         addSys("WS send: " + e);
         try { stream.getTracks().forEach((t) => t.stop()); } catch { }
+        wsGo.disabled = false;
         try { ws.close(); } catch { }
         return;
       }
@@ -534,7 +599,7 @@
       closeWsStt();
     });
 
-    addSys("Ollama + (optional) Whisper. If this URL is under /race-engineer/, telemetry is same app. Otherwise use port 4768 for eng-view. Enable Ollama stream for NDJSON; WebSocket STT needs faster-whisper.");
+    addSys("Standalone mode: telemetry iframe is loaded from port 4768; voice/chat runs on port 11734. Local TTS uses Piper when PIPER_MODEL is configured, otherwise browser speech is used.");
   </script>
 </body>
 </html>

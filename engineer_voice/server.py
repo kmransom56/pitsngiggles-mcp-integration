@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 import threading
 import time
@@ -25,19 +26,40 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC = APP_DIR / "static"
+DEFAULT_PIPER_DIR = APP_DIR.parent / "tools" / "piper"
+DEFAULT_PIPER_EXE = DEFAULT_PIPER_DIR / "piper.exe"
+DEFAULT_PIPER_MODEL = DEFAULT_PIPER_DIR / "voices" / "en_US-ryan-medium.onnx"
+DEFAULT_PIPER_CONFIG = DEFAULT_PIPER_DIR / "voices" / "en_US-ryan-medium.onnx.json"
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://127.0.0.1:11434")
 PNG_BASE = os.environ.get("PNG_BASE", "http://127.0.0.1:4768")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base.en")
+WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE = os.environ.get("WHISPER_COMPUTE", "int8")
 ENGINEER_PORT = int(os.environ.get("ENGINEER_VOICE_PORT", "11734"))
+ENGINEER_HOST = os.environ.get("ENGINEER_VOICE_HOST", "0.0.0.0")
+PIPER_EXE = os.environ.get(
+    "PIPER_EXE", str(DEFAULT_PIPER_EXE) if DEFAULT_PIPER_EXE.is_file() else "piper"
+)
+PIPER_MODEL = os.environ.get(
+    "PIPER_MODEL", str(DEFAULT_PIPER_MODEL) if DEFAULT_PIPER_MODEL.is_file() else None
+)
+PIPER_CONFIG = os.environ.get(
+    "PIPER_CONFIG",
+    str(DEFAULT_PIPER_CONFIG) if DEFAULT_PIPER_CONFIG.is_file() else None,
+)
+PIPER_SPEAKER = os.environ.get("PIPER_SPEAKER")
+PIPER_LENGTH_SCALE = os.environ.get("PIPER_LENGTH_SCALE", "0.9")
+PIPER_NOISE_SCALE = os.environ.get("PIPER_NOISE_SCALE")
 # float32 audio from browser; 48k common from AudioContext, decimate ~3:1 to match Whisper
 WS_STT_IN_SR = int(os.environ.get("WS_STT_IN_SAMPLE_RATE", "48000"))
 WS_STT_TARGET_SR = 16000
-WS_STT_CHUNK_S = float(os.environ.get("WS_STT_CHUNK_S", "1.4"))
+WS_STT_CHUNK_S = float(os.environ.get("WS_STT_CHUNK_S", "0.8"))
 # max ~2 min of audio at 16k float32
 WS_STT_MAX_FLOATS = int(os.environ.get("WS_STT_MAX_FLOATS", str(30 * 16000)))
 
@@ -64,9 +86,11 @@ def _get_whisper() -> "WhisperModel | None":
         return None
     with _whisper_lock:
         if _whisper is None:
-            device = os.environ.get("WHISPER_DEVICE", "auto")
-            compute = os.environ.get("WHISPER_COMPUTE", "int8")
-            _whisper = WhisperModel(WHISPER_MODEL, device=device, compute_type=compute)
+            _whisper = WhisperModel(
+                WHISPER_MODEL,
+                device=WHISPER_DEVICE,
+                compute_type=WHISPER_COMPUTE,
+            )
     return _whisper
 
 
@@ -87,6 +111,16 @@ class ChatIn(BaseModel):
 class ChatOut(BaseModel):
     reply: str
     context_ok: bool
+
+
+class TtsIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4_000)
+
+
+def _piper_available() -> bool:
+    if not PIPER_MODEL:
+        return False
+    return shutil.which(PIPER_EXE) is not None and Path(PIPER_MODEL).is_file()
 
 
 async def _fetch_png_context(client: httpx.AsyncClient) -> tuple[str, bool]:
@@ -209,7 +243,11 @@ async def health():
         "pits_n_giggles_http": png,
         "faster_whisper": wsp,
         "ollama_model": OLLAMA_MODEL,
+        "whisper_model": WHISPER_MODEL,
+        "whisper_device": WHISPER_DEVICE,
+        "whisper_compute": WHISPER_COMPUTE,
         "websocket_stt": wsp,
+        "piper_tts": _piper_available(),
     }
 
 
@@ -297,6 +335,61 @@ async def chat_stream(item: ChatIn):
         media_type="application/x-ndjson",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/tts")
+async def tts(item: TtsIn):
+    if not PIPER_MODEL:
+        raise HTTPException(
+            status_code=501,
+            detail="Piper TTS is not configured. Set PIPER_MODEL to a .onnx voice file.",
+        )
+    if not Path(PIPER_MODEL).is_file():
+        raise HTTPException(
+            status_code=501, detail=f"Piper model not found: {PIPER_MODEL}"
+        )
+    piper_path = shutil.which(PIPER_EXE)
+    if not piper_path:
+        raise HTTPException(
+            status_code=501, detail=f"Piper executable not found: {PIPER_EXE}"
+        )
+
+    out_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+            out_path = tmp.name
+
+        cmd = [piper_path, "--model", PIPER_MODEL, "--output_file", out_path]
+        if PIPER_CONFIG:
+            cmd.extend(["--config", PIPER_CONFIG])
+        if PIPER_SPEAKER:
+            cmd.extend(["--speaker", PIPER_SPEAKER])
+        if PIPER_LENGTH_SCALE:
+            cmd.extend(["--length_scale", PIPER_LENGTH_SCALE])
+        if PIPER_NOISE_SCALE:
+            cmd.extend(["--noise_scale", PIPER_NOISE_SCALE])
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(
+            proc.communicate((item.text.strip() + "\n").encode("utf-8")),
+            timeout=60.0,
+        )
+        if proc.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace")[:1_000]
+            raise HTTPException(status_code=502, detail=f"Piper failed: {detail}")
+        return FileResponse(
+            out_path,
+            media_type="audio/wav",
+            filename="engineer.wav",
+            background=BackgroundTask(os.unlink, out_path),
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Piper timed out.") from exc
 
 
 @app.websocket("/ws/stt")
@@ -410,4 +503,4 @@ async def stt(audio: UploadFile = File(...)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("server:app", host="127.0.0.1", port=ENGINEER_PORT, reload=False)
+    uvicorn.run("server:app", host=ENGINEER_HOST, port=ENGINEER_PORT, reload=False)

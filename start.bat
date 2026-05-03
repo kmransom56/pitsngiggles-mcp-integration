@@ -71,7 +71,7 @@ if %errorlevel% equ 0 (
 
 echo.
 echo ╔═══════════════════════════════════════════════════════════════╗
-echo ║     ✓ Pits n' Giggles is Running!                            ║
+echo ║     ✓ Pits n' Giggles is Running!                             ║
 echo ╚═══════════════════════════════════════════════════════════════╝
 echo.
 echo 🏎️  Access Points:
