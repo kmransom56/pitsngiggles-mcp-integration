@@ -525,6 +525,7 @@ if (-not $SkipEngineerVoice) {
 }
 Write-Host "  Strategy Center (Nginx, optional):  $StrategyURL" -ForegroundColor DarkGray
 Write-Host "  MCP (SSE, f1-race-engineer-lan):    $($StrategyURL.TrimEnd('/'))/f1-race-engineer-lan  (ChatGPT / Cursor; /mcp still works)" -ForegroundColor DarkGray
+    Write-Host "  MCP (Alias, mcp.netintegrate.net):  https://mcp.netintegrate.net:8443/f1-race-engineer-lan" -ForegroundColor DarkGray
 Write-Host "  ════════════════════════════════════════════" -ForegroundColor DarkGray
 Write-Host ""
 Start-Sleep -Seconds 5

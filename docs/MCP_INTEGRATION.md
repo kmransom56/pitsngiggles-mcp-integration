@@ -53,7 +53,11 @@ This will:
 
 Your MCP endpoint will be available at: `https://localhost:8443/f1-race-engineer-lan`
 
-For remote access, replace `localhost` with your server's IP or domain name.
+For remote access, use your domain name:
+- `https://f1-race-engineer.netintegrate.net:8443/f1-race-engineer-lan` (Primary)
+- `https://mcp.netintegrate.net:8443/f1-race-engineer-lan` (Alias)
+
+**Note:** Ensure your `hosts` file or DNS resolves these names.
 
 See `deployment/README.md` for detailed Nginx configuration options.
 
